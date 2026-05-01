@@ -22,8 +22,8 @@ try:
     df['Ilość [ml]'] = df['Ilość [ml]'].astype(str).str.replace(',', '.').astype(float)
     df['Moc [%]'] = df['Moc [%]'].astype(str).str.replace(',', '.').astype(float)
     
-    # Główne algorytmy przeliczeniowe
-    df['Czysty etanol [g]'] = df['Ilość [ml]'] * (df['Moc [%]'] / 100) * 0.789
+    # Główne algorytmy przeliczeniowe (wymuszenie zaokrąglenia do 1 miejsca po przecinku)
+    df['Czysty etanol [g]'] = (df['Ilość [ml]'] * (df['Moc [%]'] / 100) * 0.789).round(1)
     
     # Normalizacja nazewnictwa kategorycznego
     mapowanie = {'vk': 'Wódka kolorowa', 'p': 'Piwo', 'v': 'Wódka', 'i': 'Inne'}
@@ -40,17 +40,15 @@ try:
     dzisiaj = pd.Timestamp.now().normalize()
     streak = (dzisiaj - ostatni_wpis).days
     
-    # Zabezpieczenie przed rekordami z datą przyszłą
     if streak < 0: 
         streak = 0 
 
-    # Warunkowe formatowanie statusu
     if streak == 0:
         st.error(f"🚨 Licznik trzeźwości: {streak} dni. Pite dzisiaj.")
     elif streak == 1:
         st.warning(f"⚠️ Licznik trzeźwości: {streak} dzień. Kac?")
     else:
-        st.success(f"🛡️ Licznik trzeźwości: {streak} dni. Wątrąba regen.")
+        st.success(f"🛡️ Licznik trzeźwości: {streak} dni. Wątroba zgłasza proces regeneracji.")
 
     # --- ZESTAWIENIE TABELARYCZNE ---
     st.subheader("Ostatnie wpisy")
@@ -66,25 +64,38 @@ try:
     df_miesiac = df[df['Data'] >= miesiac_temu]
 
     if not df_miesiac.empty:
+        
+        # --- MODUŁ KPI (EKWIWALENTY SPOŻYCIA) ---
+        total_etanol = df_miesiac['Czysty etanol [g]'].sum()
+        
+        # Obliczenia fizykochemiczne jednostek referencyjnych
+        eq_kufle = round(total_etanol / 19.725, 1)  # 500ml, 5%
+        eq_shoty = round(total_etanol / 12.624, 1)  # 40ml, 40%
+        eq_flaszki = round(total_etanol / 220.92, 2) # 700ml, 40%
+        
+        st.markdown("**Twój urobek z ostatnich 30 dni w przeliczeniu na:**")
+        kpi1, kpi2, kpi3 = st.columns(3)
+        kpi1.metric(label="🍺 Kufle piwa (5%)", value=eq_kufle)
+        kpi2.metric(label="🥃 Shoty wódki (40ml)", value=eq_shoty)
+        kpi3.metric(label="🍾 Flaszki 0.7 (40%)", value=eq_flaszki)
+        
+        st.divider() # Estetyczna linia oddzielająca
+        
         col1, col2 = st.columns([2, 1])
         
         with col1:
             st.markdown("**Trendy spożycia i uśredniony ciąg**")
             
-            # Agregacja i wypełnianie dni bez logów zerami
             df_chart = df_miesiac.groupby('Data')['Czysty etanol [g]'].sum().reset_index()
             min_date = df_chart['Data'].min()
             full_date_range = pd.date_range(start=min_date, end=dzisiaj_okres, freq='D')
             df_chart = df_chart.set_index('Data').reindex(full_date_range, fill_value=0).reset_index()
             
-            # Zmiana nazewnictwa dla środowiska Altair
             df_chart = df_chart.rename(columns={'index': 'Data', 'Czysty etanol [g]': 'Etanol (g)'})
             df_chart['Data_str'] = df_chart['Data'].dt.strftime('%d.%m')
             
-            # Wygładzanie 3-dniowe
             df_chart['Trend (3-dniowy)'] = df_chart['Etanol (g)'].rolling(window=3, min_periods=1).mean()
 
-            # Renderowanie wykresu złożonego
             base = alt.Chart(df_chart).encode(x=alt.X('Data_str:N', sort=None, title='Data'))
             bars = base.mark_bar(color='#85c1e9').encode(y=alt.Y('Etanol (g):Q', title='Spożycie (g)'))
             line = base.mark_line(color='#e74c3c', size=3).encode(y='Trend (3-dniowy):Q')
@@ -94,14 +105,10 @@ try:
         with col2:
             st.markdown("**Struktura spożycia**")
             
-            # Ekstrakcja danych referencyjnych dla środowiska Altair
             df_donut = df_miesiac.copy()
             df_donut = df_donut.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
-            
-            # Grupowa agregacja po kategoriach
             df_donut = df_donut.groupby('Alkohol')['Etanol (g)'].sum().reset_index()
             
-            # Renderowanie wykresu pierścieniowego
             donut = alt.Chart(df_donut).mark_arc(innerRadius=50).encode(
                 theta=alt.Theta(field="Etanol (g)", type="quantitative"),
                 color=alt.Color(field="Alkohol", type="nominal", legend=alt.Legend(title="Trunek")),
