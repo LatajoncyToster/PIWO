@@ -40,21 +40,28 @@ try:
 
     st.subheader("Trendy spożycia (Ostatnie 30 dni)")
     
-    # Definicja horyzontu czasowego
-    dzisiaj = pd.Timestamp.now()
+    # Definicja horyzontu czasowego (normalizacja do północy, aby zachować zgodność z osią X)
+    dzisiaj = pd.Timestamp.now().normalize()
     miesiac_temu = dzisiaj - pd.Timedelta(days=30)
     df_miesiac = df[df['Data'] >= miesiac_temu]
 
     if not df_miesiac.empty:
-        # Agregacja i normalizacja atrybutów wykresu
-        df_chart = df_miesiac.groupby('Data', as_index=False)['Czysty etanol [g]'].sum()
-        df_chart = df_chart.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
+        # Wstępna agregacja
+        df_chart = df_miesiac.groupby('Data')['Czysty etanol [g]'].sum().reset_index()
+        
+        # Generowanie pełnego zakresu dat i reindeksacja (wymuszanie zer dla dni bez spożycia)
+        min_date = df_chart['Data'].min()
+        full_date_range = pd.date_range(start=min_date, end=dzisiaj, freq='D')
+        df_chart = df_chart.set_index('Data').reindex(full_date_range, fill_value=0).reset_index()
+        
+        # Normalizacja nazewnictwa i konwersja na ciągi znaków dla biblioteki Altair
+        df_chart = df_chart.rename(columns={'index': 'Data', 'Czysty etanol [g]': 'Etanol (g)'})
         df_chart['Data_str'] = df_chart['Data'].dt.strftime('%d.%m')
         
-        # Obliczenie linii trendu z wykorzystaniem 3-dniowej średniej kroczącej
+        # Obliczenie linii trendu uwzględniającej dni zerowe
         df_chart['Trend (3-dniowy)'] = df_chart['Etanol (g)'].rolling(window=3, min_periods=1).mean()
 
-        # Generowanie obieków wizualizacyjnych w przestrzeni Altair
+        # Generowanie obieków wizualizacyjnych
         base = alt.Chart(df_chart).encode(
             x=alt.X('Data_str:N', sort=None, title='Data')
         )
