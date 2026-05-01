@@ -139,22 +139,28 @@ try:
     # 1. Rozkład dni tygodnia
     with tab1:
         st.markdown("**W jakie dni pijesz najwięcej? (Dane z całej historii)**")
-        df_dni = df.groupby('Dzień tygodnia')['Czysty etanol [g]'].sum().reset_index()
+        # Usuwamy toksyczne nawiasy dla biblioteki Altair
+        df_dni = df.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
+        df_dni = df_dni.groupby('Dzień tygodnia')['Etanol (g)'].sum().reset_index()
+        
         bar_dni = alt.Chart(df_dni).mark_bar(color='#9b59b6').encode(
             x=alt.X('Dzień tygodnia:N', sort=kolejnosc_dni, title='Dzień tygodnia'),
-            y=alt.Y('Czysty etanol [g]:Q', title='Łącznie etanolu (g)'),
-            tooltip=['Dzień tygodnia', 'Czysty etanol [g]']
+            y=alt.Y('Etanol (g):Q', title='Łącznie etanolu (g)'),
+            tooltip=['Dzień tygodnia', 'Etanol (g)']
         ).properties(height=300)
         st.altair_chart(bar_dni, use_container_width=True)
 
     # 2. Podsumowanie miesięczne
     with tab2:
         st.markdown("**Progres degradacji: Miesiąc po miesiącu**")
-        df_miesiace = df.groupby('Miesiąc')['Czysty etanol [g]'].sum().reset_index()
+        # Usuwamy toksyczne nawiasy dla biblioteki Altair
+        df_miesiace = df.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
+        df_miesiace = df_miesiace.groupby('Miesiąc')['Etanol (g)'].sum().reset_index()
+        
         bar_miesiace = alt.Chart(df_miesiace).mark_bar(color='#f39c12').encode(
             x=alt.X('Miesiąc:N', sort=None, title='Miesiąc'),
-            y=alt.Y('Czysty etanol [g]:Q', title='Łącznie etanolu (g)'),
-            tooltip=['Miesiąc', 'Czysty etanol [g]']
+            y=alt.Y('Etanol (g):Q', title='Łącznie etanolu (g)'),
+            tooltip=['Miesiąc', 'Etanol (g)']
         ).properties(height=300)
         st.altair_chart(bar_miesiace, use_container_width=True)
 
@@ -170,7 +176,6 @@ try:
                 data_format = row['Data'].strftime('%d.%m.%Y')
                 gramy = row['Czysty etanol [g]']
                 
-                # Zliczanie ekwiwalentów dla wyobraźni
                 eq_kufle_podium = int(round(gramy / 19.725, 0)) 
                 
                 st.markdown(f"### {medale[i]} **{data_format}**")
