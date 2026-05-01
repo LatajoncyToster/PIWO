@@ -44,12 +44,15 @@ try:
     miesiac_temu = dzisiaj - pd.Timedelta(days=30)
     df_miesiac = df[df['Data'] >= miesiac_temu]
 
-    if not df_miesiac.empty:
-        # Najprostsze grupowanie - Streamlit to uwielbia i sam zrobi z tego oś X
-        df_chart = df_miesiac.groupby('Data')['Czysty etanol [g]'].sum()
+   if not df_miesiac.empty:
+        # Agregacja bez ustawiania daty jako indeksu (as_index=False to tutaj life-saver)
+        df_chart = df_miesiac.groupby('Data', as_index=False)['Czysty etanol [g]'].sum()
         
-        # WYMUSZENIE WYKRESU SŁUPKOWEGO
-        st.bar_chart(df_chart)
+        # Tłumaczymy datę na format DD.MM, żeby wykres był czytelny i się nie krztusił
+        df_chart['Data_str'] = df_chart['Data'].dt.strftime('%d.%m')
+        
+        # Rysujemy słupki jak krowie na rowie - podajemy co jest X, a co Y
+        st.bar_chart(data=df_chart, x='Data_str', y='Czysty etanol [g]')
     else:
         st.info("Brak danych z ostatnich 30 dni. Czas coś wpisać!")
 
