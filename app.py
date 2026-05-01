@@ -52,7 +52,7 @@ try:
     
     df['Data'] = pd.to_datetime(df['Data'], format='%d.%m.%Y')
     
-    # Inżynieria cech czasowych 
+    # Inżynieria cech czasowych dla analityki zaawansowanej
     dni_map = {'Monday': 'Poniedziałek', 'Tuesday': 'Wtorek', 'Wednesday': 'Środa', 'Thursday': 'Czwartek', 'Friday': 'Piątek', 'Saturday': 'Sobota', 'Sunday': 'Niedziela'}
     miesiace_map = {'January': 'Styczeń', 'February': 'Luty', 'March': 'Marzec', 'April': 'Kwiecień', 'May': 'Maj', 'June': 'Czerwiec', 'July': 'Lipiec', 'August': 'Sierpień', 'September': 'Wrzesień', 'October': 'Październik', 'November': 'Listopad', 'December': 'Grudzień'}
     
@@ -111,7 +111,6 @@ try:
     
     kolejnosc_kalendarza = ['Pon', 'Wto', 'Śro', 'Czw', 'Pią', 'Sob', 'Nie']
     
-    # Wywalone sort='descending' z osi Y
     heatmap = alt.Chart(df_kalendarz).mark_rect(stroke='gray', strokeWidth=0.5, cornerRadius=3).encode(
         x=alt.X('Nazwa_dnia:N', sort=kolejnosc_kalendarza, title=None, axis=alt.Axis(labelAngle=0, labelPadding=10)),
         y=alt.Y('Rząd_tygodnia:O', title=None, axis=alt.Axis(labels=False, ticks=False)), 
@@ -119,7 +118,6 @@ try:
         tooltip=['Data', 'Etanol (g)']
     ).properties(height=250)
     
-    # Wywalone sort='descending' z osi Y
     text = alt.Chart(df_kalendarz).mark_text(baseline='middle').encode(
         x=alt.X('Nazwa_dnia:N', sort=kolejnosc_kalendarza),
         y=alt.Y('Rząd_tygodnia:O'),
@@ -133,19 +131,36 @@ try:
     st.subheader("Panel (Ostatnie 30 dni)")
     
     miesiac_temu = dzisiaj - pd.Timedelta(days=30)
+    dwa_miesiace_temu = dzisiaj - pd.Timedelta(days=60)
+    
+    # Ekstrakcja danych dla bieżącego i poprzedniego okna 30-dniowego
     df_miesiac = df[df['Data'] >= miesiac_temu]
+    df_poprzedni_miesiac = df[(df['Data'] >= dwa_miesiace_temu) & (df['Data'] < miesiac_temu)]
 
     if not df_miesiac.empty:
+        # Kalkulacje bieżące
         total_etanol = df_miesiac['Czysty etanol [g]'].sum()
         eq_kufle = int(round(total_etanol / 19.725, 0))  
         eq_shoty = int(round(total_etanol / 12.624, 0))  
         eq_flaszki = round(total_etanol / 220.92, 1)     
         
+        # Kalkulacje historyczne (baza do obliczenia delty)
+        total_etanol_poprzedni = df_poprzedni_miesiac['Czysty etanol [g]'].sum() if not df_poprzedni_miesiac.empty else 0
+        eq_kufle_poprzednie = int(round(total_etanol_poprzedni / 19.725, 0))
+        eq_shoty_poprzednie = int(round(total_etanol_poprzedni / 12.624, 0))
+        eq_flaszki_poprzednie = round(total_etanol_poprzedni / 220.92, 1)
+        
+        # Ostateczna kalkulacja różnicowa
+        delta_kufle = eq_kufle - eq_kufle_poprzednie
+        delta_shoty = eq_shoty - eq_shoty_poprzednie
+        delta_flaszki = round(eq_flaszki - eq_flaszki_poprzednie, 1)
+        
         st.markdown("**Twój urobek z ostatnich 30 dni w przeliczeniu na:**")
         kpi1, kpi2, kpi3 = st.columns(3)
-        kpi1.metric(label="🍺 Kufle piwa (5%)", value=eq_kufle)
-        kpi2.metric(label="🥃 Shoty wódki (40ml)", value=eq_shoty)
-        kpi3.metric(label="🍾 Flaszki 0.7 (40%)", value=eq_flaszki)
+        # Zastosowanie parametru delta_color="inverse" (wzrost na czerwono, spadek na zielono)
+        kpi1.metric(label="🍺 Kufle piwa (5%)", value=eq_kufle, delta=delta_kufle, delta_color="inverse")
+        kpi2.metric(label="🥃 Shoty wódki (40ml)", value=eq_shoty, delta=delta_shoty, delta_color="inverse")
+        kpi3.metric(label="🍾 Flaszki 0.7 (40%)", value=eq_flaszki, delta=delta_flaszki, delta_color="inverse")
         
         st.divider() 
         col1, col2 = st.columns([2, 1])
@@ -199,10 +214,7 @@ try:
     with tab2:
         st.markdown("**Ile ŚREDNIO wlewam w siebie w dany miesiąc**")
         df_miesiace = df.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
-        
-        # FIX: Wyrzucamy Kwiecień z tego wykresu, bo zacząłeś pod koniec miesiąca i psuje staty
         df_miesiace = df_miesiace[df_miesiace['Miesiąc'] != 'Kwiecień']
-        
         df_miesiace = df_miesiace.groupby('Miesiąc')['Etanol (g)'].mean().round(1).reset_index()
         
         bar_miesiace = alt.Chart(df_miesiace).mark_bar(color='#f39c12').encode(
