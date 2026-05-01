@@ -62,7 +62,7 @@ try:
     kolejnosc_dni = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek', 'Sobota', 'Niedziela']
 
     # --- INTERFEJS GŁÓWNY ---
-    st.title("🍺 Alcohol Tracker 3000")
+    st.title("🍺 Alkoholizm jupi")
     
     ostatni_wpis = df['Data'].max()
     dzisiaj = pd.Timestamp.now().normalize()
