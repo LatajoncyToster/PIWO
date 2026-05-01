@@ -18,14 +18,14 @@ try:
     
     # --- MODUŁ WPROWADZANIA DANYCH (SIDEBAR) ---
     with st.sidebar:
-        st.header("📝 Dodaj tankowanie")
+        st.header("📝 Dodaj dane")
         with st.form("add_drink_form", clear_on_submit=True):
             nowa_data = st.date_input("Data spożycia", value=datetime.date.today())
             nowy_alko = st.selectbox("Rodzaj trunku", ["Piwo", "Wódka", "Wódka kolorowa", "Inne"])
             nowa_ilosc = st.number_input("Ilość [ml]", min_value=0, step=50, value=500)
             nowa_moc = st.number_input("Moc [%]", min_value=0.0, step=0.5, value=5.0)
             
-            submit_button = st.form_submit_button("Zalej formę 🍻")
+            submit_button = st.form_submit_button("Dodaj trunek 🍻")
             
             if submit_button:
                 reverse_map = {'Wódka kolorowa': 'vk', 'Piwo': 'p', 'Wódka': 'v', 'Inne': 'i'}
