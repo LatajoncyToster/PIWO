@@ -26,7 +26,7 @@ try:
     df['Czysty etanol [g]'] = df['Ilość [ml]'] * (df['Moc [%]'] / 100) * 0.789
     
     # Normalizacja nazewnictwa kategorycznego
-    mapowanie = {'vk': 'Wódka kolorowa', 'p': 'Piwo', 'v': 'Wódka'}
+    mapowanie = {'vk': 'Wódka kolorowa', 'p': 'Piwo', 'v': 'Wódka', 'i': 'Inne'}
     df['Alkohol'] = df['Alkohol'].replace(mapowanie)
     
     # Standaryzacja wektorów czasowych
@@ -46,11 +46,11 @@ try:
 
     # Warunkowe formatowanie statusu
     if streak == 0:
-        st.error(f"🚨 Licznik trzeźwości: {streak} dni. Pite dzisiaj. System odnotował fail.")
+        st.error(f"🚨 Licznik trzeźwości: {streak} dni. Pite dzisiaj.")
     elif streak == 1:
-        st.warning(f"⚠️ Licznik trzeźwości: {streak} dzień. Kac w toku?")
+        st.warning(f"⚠️ Licznik trzeźwości: {streak} dzień. Kac?")
     else:
-        st.success(f"🛡️ Licznik trzeźwości: {streak} dni. Wątroba zgłasza proces regeneracji.")
+        st.success(f"🛡️ Licznik trzeźwości: {streak} dni. Wątrąba regen.")
 
     # --- ZESTAWIENIE TABELARYCZNE ---
     st.subheader("Ostatnie wpisy")
