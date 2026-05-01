@@ -54,13 +54,11 @@ try:
     
     # Inżynieria cech czasowych 
     dni_map = {'Monday': 'Poniedziałek', 'Tuesday': 'Wtorek', 'Wednesday': 'Środa', 'Thursday': 'Czwartek', 'Friday': 'Piątek', 'Saturday': 'Sobota', 'Sunday': 'Niedziela'}
-    # Poprawione mapowanie miesięcy (bez prefiksów liczbowych)
     miesiace_map = {'January': 'Styczeń', 'February': 'Luty', 'March': 'Marzec', 'April': 'Kwiecień', 'May': 'Maj', 'June': 'Czerwiec', 'July': 'Lipiec', 'August': 'Sierpień', 'September': 'Wrzesień', 'October': 'Październik', 'November': 'Listopad', 'December': 'Grudzień'}
     
     df['Dzień tygodnia'] = df['Data'].dt.day_name().map(dni_map)
     df['Miesiąc'] = df['Data'].dt.month_name().map(miesiace_map)
     
-    # Tablice wymuszające poprawne sortowanie na wykresach
     kolejnosc_dni = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek', 'Sobota', 'Niedziela']
     kolejnosc_miesiecy = ['Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec', 'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień']
 
@@ -104,7 +102,6 @@ try:
     df_etanol_dziennie = df.groupby('Data')['Czysty etanol [g]'].sum().reset_index()
     df_kalendarz = df_kalendarz.merge(df_etanol_dziennie, on='Data', how='left').fillna(0)
     
-    # FIX KRYTYCZNY: Usunięcie nawiasów kwadratowych przed renderowaniem!
     df_kalendarz = df_kalendarz.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
     
     nazwy_krotkie = {0: 'Pon', 1: 'Wto', 2: 'Śro', 3: 'Czw', 4: 'Pią', 5: 'Sob', 6: 'Nie'}
@@ -114,16 +111,18 @@ try:
     
     kolejnosc_kalendarza = ['Pon', 'Wto', 'Śro', 'Czw', 'Pią', 'Sob', 'Nie']
     
+    # Wywalone sort='descending' z osi Y
     heatmap = alt.Chart(df_kalendarz).mark_rect(stroke='gray', strokeWidth=0.5, cornerRadius=3).encode(
         x=alt.X('Nazwa_dnia:N', sort=kolejnosc_kalendarza, title=None, axis=alt.Axis(labelAngle=0, labelPadding=10)),
-        y=alt.Y('Rząd_tygodnia:O', title=None, sort='descending', axis=alt.Axis(labels=False, ticks=False)), 
+        y=alt.Y('Rząd_tygodnia:O', title=None, axis=alt.Axis(labels=False, ticks=False)), 
         color=alt.Color('Etanol (g):Q', scale=alt.Scale(scheme='reds'), legend=alt.Legend(title="Etanol (g)")),
         tooltip=['Data', 'Etanol (g)']
     ).properties(height=250)
     
+    # Wywalone sort='descending' z osi Y
     text = alt.Chart(df_kalendarz).mark_text(baseline='middle').encode(
         x=alt.X('Nazwa_dnia:N', sort=kolejnosc_kalendarza),
-        y=alt.Y('Rząd_tygodnia:O', sort='descending'),
+        y=alt.Y('Rząd_tygodnia:O'),
         text=alt.Text('Dzień_miesiąca:N'),
         color=alt.condition(alt.datum['Etanol (g)'] > 60, alt.value('white'), alt.value('black'))
     )
@@ -200,9 +199,12 @@ try:
     with tab2:
         st.markdown("**Ile ŚREDNIO wlewam w siebie w dany miesiąc**")
         df_miesiace = df.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
+        
+        # FIX: Wyrzucamy Kwiecień z tego wykresu, bo zacząłeś pod koniec miesiąca i psuje staty
+        df_miesiace = df_miesiace[df_miesiace['Miesiąc'] != 'Kwiecień']
+        
         df_miesiace = df_miesiace.groupby('Miesiąc')['Etanol (g)'].mean().round(1).reset_index()
         
-        # Wymuszone sortowanie miesięcy za pomocą predefiniowanej tablicy
         bar_miesiace = alt.Chart(df_miesiace).mark_bar(color='#f39c12').encode(
             x=alt.X('Miesiąc:N', sort=kolejnosc_miesiecy, title='Miesiąc'),
             y=alt.Y('Etanol (g):Q', title='Średnio etanolu (g) / posiedzenie'),
