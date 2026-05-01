@@ -68,10 +68,10 @@ try:
         # --- MODUŁ KPI (EKWIWALENTY SPOŻYCIA) ---
         total_etanol = df_miesiac['Czysty etanol [g]'].sum()
         
-        # Obliczenia fizykochemiczne jednostek referencyjnych
-        eq_kufle = round(total_etanol / 19.725, 1)  # 500ml, 5%
-        eq_shoty = round(total_etanol / 12.624, 1)  # 40ml, 40%
-        eq_flaszki = round(total_etanol / 220.92, 2) # 700ml, 40%
+        # Obliczenia fizykochemiczne jednostek referencyjnych (zaktualizowane zaokrąglenia)
+        eq_kufle = int(round(total_etanol / 19.725, 0))  # Rzutowanie na int (całości)
+        eq_shoty = int(round(total_etanol / 12.624, 0))  # Rzutowanie na int (całości)
+        eq_flaszki = round(total_etanol / 220.92, 1)     # Zostaje 1 miejsce po przecinku
         
         st.markdown("**Twój urobek z ostatnich 30 dni w przeliczeniu na:**")
         kpi1, kpi2, kpi3 = st.columns(3)
@@ -79,7 +79,7 @@ try:
         kpi2.metric(label="🥃 Shoty wódki (40ml)", value=eq_shoty)
         kpi3.metric(label="🍾 Flaszki 0.7 (40%)", value=eq_flaszki)
         
-        st.divider() # Estetyczna linia oddzielająca
+        st.divider() 
         
         col1, col2 = st.columns([2, 1])
         
