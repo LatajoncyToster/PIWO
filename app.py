@@ -82,7 +82,7 @@ try:
     st.dataframe(df_display.tail(10))
 
     # --- PANEL ANALITYCZNY 30-DNIOWY ---
-    st.subheader("Panel Operacyjny (Ostatnie 30 dni)")
+    st.subheader("Panel (Ostatnie 30 dni)")
     
     miesiac_temu = dzisiaj - pd.Timedelta(days=30)
     df_miesiac = df[df['Data'] >= miesiac_temu]
@@ -132,13 +132,13 @@ try:
     st.divider()
 
     # --- ANALITYKA HISTORYCZNA I BEHAWIORALNA ---
-    st.subheader("Wielki Brat Patrzy: Analiza Historyczna")
+    st.subheader("Analiza Historyczna")
     
     tab1, tab2, tab3 = st.tabs(["📅 Rozkład Tygodniowy", "📈 Podsumowanie Miesięcy", "🏆 Hall of Shame (Top 3)"])
     
    # 1. Rozkład dni tygodnia
     with tab1:
-        st.markdown("**Ile ŚREDNIO wlewasz w siebie w dany dzień tygodnia?**")
+        st.markdown("**Ile ŚREDNIO wlewam w siebie w dany dzień tygodnia?**")
         df_dni = df.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
         
         # Zmiana z sum() na mean() i zaokrąglenie do 1 miejsca po przecinku
@@ -153,7 +153,7 @@ try:
 
     # 2. Podsumowanie miesięczne
     with tab2:
-        st.markdown("**Intensywność tankowania: Średnia na jeden wpis w miesiącu**")
+        st.markdown("**Ile ŚREDNIO wlewam w siebie w dany miesiąc**")
         df_miesiace = df.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
         
         # Zmiana z sum() na mean()
@@ -168,7 +168,7 @@ try:
 
     # 3. Podium - Top 3 Dni
     with tab3:
-        st.markdown("**Najgorsze incydenty w historii pomiarów:**")
+        st.markdown("**Dni największego voltarzu:**")
         df_podium = df.groupby('Data')['Czysty etanol [g]'].sum().reset_index()
         df_podium = df_podium.sort_values(by='Czysty etanol [g]', ascending=False).head(3).reset_index(drop=True)
         
