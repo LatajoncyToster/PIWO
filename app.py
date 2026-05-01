@@ -52,13 +52,17 @@ try:
     
     df['Data'] = pd.to_datetime(df['Data'], format='%d.%m.%Y')
     
-    # Inżynieria cech czasowych dla analityki zaawansowanej
+    # Inżynieria cech czasowych 
     dni_map = {'Monday': 'Poniedziałek', 'Tuesday': 'Wtorek', 'Wednesday': 'Środa', 'Thursday': 'Czwartek', 'Friday': 'Piątek', 'Saturday': 'Sobota', 'Sunday': 'Niedziela'}
-    miesiace_map = {'January': '01. Styczeń', 'February': '02. Luty', 'March': '03. Marzec', 'April': '04. Kwiecień', 'May': '05. Maj', 'June': '06. Czerwiec', 'July': '07. Lipiec', 'August': '08. Sierpień', 'September': '09. Wrzesień', 'October': '10. Październik', 'November': '11. Listopad', 'December': '12. Grudzień'}
+    # Poprawione mapowanie miesięcy (bez prefiksów liczbowych)
+    miesiace_map = {'January': 'Styczeń', 'February': 'Luty', 'March': 'Marzec', 'April': 'Kwiecień', 'May': 'Maj', 'June': 'Czerwiec', 'July': 'Lipiec', 'August': 'Sierpień', 'September': 'Wrzesień', 'October': 'Październik', 'November': 'Listopad', 'December': 'Grudzień'}
     
     df['Dzień tygodnia'] = df['Data'].dt.day_name().map(dni_map)
     df['Miesiąc'] = df['Data'].dt.month_name().map(miesiace_map)
+    
+    # Tablice wymuszające poprawne sortowanie na wykresach
     kolejnosc_dni = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek', 'Sobota', 'Niedziela']
+    kolejnosc_miesiecy = ['Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec', 'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień']
 
     # --- INTERFEJS GŁÓWNY ---
     st.title("🍺 Alkoholizm jupi")
@@ -79,56 +83,49 @@ try:
     st.subheader("Ostatnie wpisy")
     df_display = df.copy()
     
-    # Skracanie dni tygodnia i formatowanie daty
     skroty_dni = {'Poniedziałek': 'Pon', 'Wtorek': 'Wto', 'Środa': 'Śro', 'Czwartek': 'Czw', 'Piątek': 'Pią', 'Sobota': 'Sob', 'Niedziela': 'Nie'}
     df_display['Dzień'] = df_display['Dzień tygodnia'].map(skroty_dni)
     df_display['Data'] = df_display['Data'].dt.strftime('%d.%m.%Y')
     
-    # Wybór i reorganizacja kolumn (ukrywamy stary Dzień tygodnia i Miesiąc)
     kolumny_widoczne = ['Dzień', 'Data', 'Alkohol', 'Ilość [ml]', 'Moc [%]', 'Czysty etanol [g]']
     df_display = df_display[kolumny_widoczne]
     
-    # Streamlit w wersji wyższej obsługuje hide_index=True
     st.dataframe(df_display.tail(10), hide_index=True)
 
     # --- KALENDARZ MIESIĘCZNY (HEATMAP) ---
     st.subheader(f"📅 Kalendarz Spożycia ({dzisiaj.strftime('%m.%Y')})")
     
-    # Generowanie siatki dla aktualnego miesiąca
     poczatek_miesiaca = dzisiaj.replace(day=1)
     koniec_miesiaca = (poczatek_miesiaca + pd.DateOffset(months=1)) - pd.Timedelta(days=1)
     
     dni_miesiaca = pd.date_range(start=poczatek_miesiaca, end=koniec_miesiaca, freq='D')
     df_kalendarz = pd.DataFrame({'Data': dni_miesiaca})
     
-    # Połączenie pełnego kalendarza z danymi o etanolu
     df_etanol_dziennie = df.groupby('Data')['Czysty etanol [g]'].sum().reset_index()
     df_kalendarz = df_kalendarz.merge(df_etanol_dziennie, on='Data', how='left').fillna(0)
     
-    # Obliczanie współrzędnych do siatki (Kolumna = Dzień, Wiersz = Tydzień)
+    # FIX KRYTYCZNY: Usunięcie nawiasów kwadratowych przed renderowaniem!
+    df_kalendarz = df_kalendarz.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
+    
     nazwy_krotkie = {0: 'Pon', 1: 'Wto', 2: 'Śro', 3: 'Czw', 4: 'Pią', 5: 'Sob', 6: 'Nie'}
     df_kalendarz['Nazwa_dnia'] = df_kalendarz['Data'].dt.dayofweek.map(nazwy_krotkie)
     df_kalendarz['Dzień_miesiąca'] = df_kalendarz['Data'].dt.day.astype(str)
-    # Logika układania wierszy kalendarza
     df_kalendarz['Rząd_tygodnia'] = df_kalendarz['Data'].apply(lambda d: (d.day - 1 + d.replace(day=1).weekday()) // 7)
     
     kolejnosc_kalendarza = ['Pon', 'Wto', 'Śro', 'Czw', 'Pią', 'Sob', 'Nie']
     
-    # Geometria kafelków
     heatmap = alt.Chart(df_kalendarz).mark_rect(stroke='gray', strokeWidth=0.5, cornerRadius=3).encode(
         x=alt.X('Nazwa_dnia:N', sort=kolejnosc_kalendarza, title=None, axis=alt.Axis(labelAngle=0, labelPadding=10)),
-        y=alt.Y('Rząd_tygodnia:O', title=None, sort='descending', axis=alt.Axis(labels=False, ticks=False)), # Ukryte indeksy y
-        color=alt.Color('Czysty etanol [g]:Q', scale=alt.Scale(scheme='reds'), legend=alt.Legend(title="Etanol (g)")),
-        tooltip=['Data', 'Czysty etanol [g]']
+        y=alt.Y('Rząd_tygodnia:O', title=None, sort='descending', axis=alt.Axis(labels=False, ticks=False)), 
+        color=alt.Color('Etanol (g):Q', scale=alt.Scale(scheme='reds'), legend=alt.Legend(title="Etanol (g)")),
+        tooltip=['Data', 'Etanol (g)']
     ).properties(height=250)
     
-    # Geometria tekstu (numerki dni)
     text = alt.Chart(df_kalendarz).mark_text(baseline='middle').encode(
         x=alt.X('Nazwa_dnia:N', sort=kolejnosc_kalendarza),
         y=alt.Y('Rząd_tygodnia:O', sort='descending'),
         text=alt.Text('Dzień_miesiąca:N'),
-        # Zmiana koloru tekstu jeśli kafelek jest bardzo ciemny
-        color=alt.condition(alt.datum['Czysty etanol [g]'] > 60, alt.value('white'), alt.value('black'))
+        color=alt.condition(alt.datum['Etanol (g)'] > 60, alt.value('white'), alt.value('black'))
     )
 
     st.altair_chart(heatmap + text, use_container_width=True)
@@ -205,8 +202,9 @@ try:
         df_miesiace = df.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
         df_miesiace = df_miesiace.groupby('Miesiąc')['Etanol (g)'].mean().round(1).reset_index()
         
+        # Wymuszone sortowanie miesięcy za pomocą predefiniowanej tablicy
         bar_miesiace = alt.Chart(df_miesiace).mark_bar(color='#f39c12').encode(
-            x=alt.X('Miesiąc:N', sort=None, title='Miesiąc'),
+            x=alt.X('Miesiąc:N', sort=kolejnosc_miesiecy, title='Miesiąc'),
             y=alt.Y('Etanol (g):Q', title='Średnio etanolu (g) / posiedzenie'),
             tooltip=['Miesiąc', 'Etanol (g)']
         ).properties(height=300)
