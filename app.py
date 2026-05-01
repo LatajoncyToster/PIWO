@@ -136,30 +136,32 @@ try:
     
     tab1, tab2, tab3 = st.tabs(["📅 Rozkład Tygodniowy", "📈 Podsumowanie Miesięcy", "🏆 Hall of Shame (Top 3)"])
     
-    # 1. Rozkład dni tygodnia
+   # 1. Rozkład dni tygodnia
     with tab1:
-        st.markdown("**W jakie dni pijesz najwięcej? (Dane z całej historii)**")
-        # Usuwamy toksyczne nawiasy dla biblioteki Altair
+        st.markdown("**Ile ŚREDNIO wlewasz w siebie w dany dzień tygodnia?**")
         df_dni = df.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
-        df_dni = df_dni.groupby('Dzień tygodnia')['Etanol (g)'].sum().reset_index()
+        
+        # Zmiana z sum() na mean() i zaokrąglenie do 1 miejsca po przecinku
+        df_dni = df_dni.groupby('Dzień tygodnia')['Etanol (g)'].mean().round(1).reset_index()
         
         bar_dni = alt.Chart(df_dni).mark_bar(color='#9b59b6').encode(
             x=alt.X('Dzień tygodnia:N', sort=kolejnosc_dni, title='Dzień tygodnia'),
-            y=alt.Y('Etanol (g):Q', title='Łącznie etanolu (g)'),
+            y=alt.Y('Etanol (g):Q', title='Średnio etanolu (g) / posiedzenie'),
             tooltip=['Dzień tygodnia', 'Etanol (g)']
         ).properties(height=300)
         st.altair_chart(bar_dni, use_container_width=True)
 
     # 2. Podsumowanie miesięczne
     with tab2:
-        st.markdown("**Progres degradacji: Miesiąc po miesiącu**")
-        # Usuwamy toksyczne nawiasy dla biblioteki Altair
+        st.markdown("**Intensywność tankowania: Średnia na jeden wpis w miesiącu**")
         df_miesiace = df.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
-        df_miesiace = df_miesiace.groupby('Miesiąc')['Etanol (g)'].sum().reset_index()
+        
+        # Zmiana z sum() na mean()
+        df_miesiace = df_miesiace.groupby('Miesiąc')['Etanol (g)'].mean().round(1).reset_index()
         
         bar_miesiace = alt.Chart(df_miesiace).mark_bar(color='#f39c12').encode(
             x=alt.X('Miesiąc:N', sort=None, title='Miesiąc'),
-            y=alt.Y('Etanol (g):Q', title='Łącznie etanolu (g)'),
+            y=alt.Y('Etanol (g):Q', title='Średnio etanolu (g) / posiedzenie'),
             tooltip=['Miesiąc', 'Etanol (g)']
         ).properties(height=300)
         st.altair_chart(bar_miesiace, use_container_width=True)
