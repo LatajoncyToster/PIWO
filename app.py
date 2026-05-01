@@ -45,14 +45,15 @@ try:
     df_miesiac = df[df['Data'] >= miesiac_temu]
 
     if not df_miesiac.empty:
-        # Agregacja bez ustawiania daty jako indeksu (ratuje oś X)
+        # Agregacja
         df_chart = df_miesiac.groupby('Data', as_index=False)['Czysty etanol [g]'].sum()
-        
-        # Tłumaczymy datę na format DD.MM, żeby wykres był czytelny
         df_chart['Data_str'] = df_chart['Data'].dt.strftime('%d.%m')
         
-        # Rysujemy słupki jak krowie na rowie - podajemy co jest X, a co Y
-        st.bar_chart(data=df_chart, x='Data_str', y='Czysty etanol [g]')
+        # MAGIA: Zmieniamy nazwę kolumny, żeby usunąć z niej kwadratowe nawiasy!
+        df_chart = df_chart.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
+        
+        # Rysujemy słupki na bezpiecznej nazwie
+        st.bar_chart(data=df_chart, x='Data_str', y='Etanol (g)')
     else:
         st.info("Brak danych z ostatnich 30 dni. Czas coś wpisać!")
 
