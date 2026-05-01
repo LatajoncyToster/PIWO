@@ -3,9 +3,8 @@ import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
-# Konfiguracja autoryzacji przez Streamlit Secrets (dla bezpieczeństwa w chmurze)
+# Konfiguracja autoryzacji
 def get_gspread_client():
-    # Dane autoryzacyjne będą pobierane z bezpiecznych ustawień Streamlit Cloud
     creds_dict = st.secrets["gcp_service_account"]
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
     creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
@@ -13,30 +12,41 @@ def get_gspread_client():
 
 try:
     client = get_gspread_client()
-    # WPISZ PONIŻEJ DOKŁADNĄ NAZWĘ SWOJEGO ARKUSZA
     sheet = client.open('PIWO').sheet1 
     data = sheet.get_all_records()
     df = pd.DataFrame(data)
 
-    # Logika transformacji danych
-    # Mapujemy Twoje skróty na pełne nazwy dla estetyki wykresów
-    mapowanie = {'vk': 'Wódka kolorowa', 'p': 'Piwo','v': 'Wódka'}
+    # Transformacja danych i obliczanie masy etanolu
+    mapowanie = {'vk': 'Wódka kolorowa', 'p': 'Piwo'}
     df['Alkohol'] = df['Alkohol'].replace(mapowanie)
-
-    # Obliczanie czystego etanolu (Skasowałeś kolumnę w Excelu, więc liczymy tutaj)
     df['Czysty etanol [g]'] = df['Ilość [ml]'] * (df['Moc [%]'] / 100) * 0.789
 
-    # Interfejs Streamlit
-    st.title("Alcohol Tracker 3000")
+    # KRYTYCZNA NAPRAWA: Konwersja tekstu na obiekt daty, aby wykres działał poprawnie
+    df['Data'] = pd.to_datetime(df['Data'], format='%d.%m.%Y')
+
+    # Interfejs
+    st.title("🍺 Alcohol Tracker 3000")
     
     st.subheader("Ostatnie wpisy")
-    st.write(df.tail(10))
+    # Zamieniamy datę z powrotem na tekst tylko do wyświetlenia w tabeli, żeby ładnie wyglądało
+    df_display = df.copy()
+    df_display['Data'] = df_display['Data'].dt.strftime('%d.%m.%Y')
+    st.dataframe(df_display.tail(10))
 
-    st.subheader("Spożycie czystego etanolu w czasie")
-    # Agregacja po dacie, żeby wykres był czytelny
-    df_chart = df.groupby('Data')['Czysty etanol [g]'].sum().reset_index()
-    st.line_chart(data=df_chart, x='Data', y='Czysty etanol [g]')
+    st.subheader("Trendy spożycia (Ostatnie 30 dni)")
+    
+    # Filtracja danych z ostatniego miesiąca
+    dzisiaj = pd.Timestamp.now()
+    miesiac_temu = dzisiaj - pd.Timedelta(days=30)
+    df_miesiac = df[df['Data'] >= miesiac_temu]
+
+    # Agregacja i przygotowanie wykresu liniowego
+    if not df_miesiac.empty:
+        df_chart = df_miesiac.groupby('Data')['Czysty etanol [g]'].sum().reset_index()
+        df_chart = df_chart.set_index('Data')
+        st.line_chart(df_chart['Czysty etanol [g]'])
+    else:
+        st.info("Brak danych z ostatnich 30 dni. Jesteś trzeźwy, czy zapomniałeś wpisać?")
 
 except Exception as e:
-    st.error(f"Coś wywaliło: {e}")
-    st.info("Upewnij się, że nazwa arkusza w kodzie jest identyczna z tą w Google Sheets.")
+    st.error(f"Błąd krytyczny: {e}")
