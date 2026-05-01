@@ -3,6 +3,7 @@ import pandas as pd
 import gspread
 import altair as alt
 from oauth2client.service_account import ServiceAccountCredentials
+import datetime
 
 # Konfiguracja autoryzacji GCP
 def get_gspread_client():
@@ -12,30 +13,51 @@ def get_gspread_client():
     return gspread.authorize(creds)
 
 try:
-    # --- POBIERANIE I CZYSZCZENIE DANYCH ---
     client = get_gspread_client()
     sheet = client.open('PIWO').sheet1 
+    
+    # --- MODUŁ WPROWADZANIA DANYCH (SIDEBAR) ---
+    with st.sidebar:
+        st.header("📝 Dodaj tankowanie")
+        with st.form("add_drink_form", clear_on_submit=True):
+            nowa_data = st.date_input("Data spożycia", value=datetime.date.today())
+            nowy_alko = st.selectbox("Rodzaj trunku", ["Piwo", "Wódka", "Wódka kolorowa", "Inne"])
+            nowa_ilosc = st.number_input("Ilość [ml]", min_value=0, step=50, value=500)
+            nowa_moc = st.number_input("Moc [%]", min_value=0.0, step=0.5, value=5.0)
+            
+            submit_button = st.form_submit_button("Zalej formę 🍻")
+            
+            if submit_button:
+                # Słownik mapowania odwrotnego (do zapisu skrótów w arkuszu)
+                reverse_map = {'Wódka kolorowa': 'vk', 'Piwo': 'p', 'Wódka': 'v', 'Inne': 'i'}
+                skrot_alko = reverse_map[nowy_alko]
+                data_str = nowa_data.strftime('%d.%m.%Y')
+                
+                try:
+                    # Dodanie nowego wiersza na końcu arkusza
+                    sheet.append_row([data_str, skrot_alko, nowa_ilosc, nowa_moc])
+                    st.success("Wpis dodany pomyślnie!")
+                    st.rerun() # Wymuszenie twardego przeładowania aplikacji
+                except Exception as e:
+                    st.error(f"Błąd zapisu do chmury: {e}")
+
+    # --- POBIERANIE I CZYSZCZENIE DANYCH ---
     data = sheet.get_all_records()
     df = pd.DataFrame(data)
 
-    # Konwersja i ujednolicenie formatów liczbowych
     df['Ilość [ml]'] = df['Ilość [ml]'].astype(str).str.replace(',', '.').astype(float)
     df['Moc [%]'] = df['Moc [%]'].astype(str).str.replace(',', '.').astype(float)
     
-    # Główne algorytmy przeliczeniowe (wymuszenie zaokrąglenia do 1 miejsca po przecinku)
     df['Czysty etanol [g]'] = (df['Ilość [ml]'] * (df['Moc [%]'] / 100) * 0.789).round(1)
     
-    # Normalizacja nazewnictwa kategorycznego
     mapowanie = {'vk': 'Wódka kolorowa', 'p': 'Piwo', 'v': 'Wódka', 'i': 'Inne'}
     df['Alkohol'] = df['Alkohol'].replace(mapowanie)
     
-    # Standaryzacja wektorów czasowych
     df['Data'] = pd.to_datetime(df['Data'], format='%d.%m.%Y')
 
     # --- INTERFEJS GŁÓWNY ---
     st.title("🍺 Alcohol Tracker 3000")
     
-    # Moduł Grywalizacji: Licznik Trzeźwości
     ostatni_wpis = df['Data'].max()
     dzisiaj = pd.Timestamp.now().normalize()
     streak = (dzisiaj - ostatni_wpis).days
@@ -50,13 +72,11 @@ try:
     else:
         st.success(f"🛡️ Licznik trzeźwości: {streak} dni. Wątroba zgłasza proces regeneracji.")
 
-    # --- ZESTAWIENIE TABELARYCZNE ---
     st.subheader("Ostatnie wpisy")
     df_display = df.copy()
     df_display['Data'] = df_display['Data'].dt.strftime('%d.%m.%Y')
     st.dataframe(df_display.tail(10))
 
-    # --- PANEL ANALITYCZNY ---
     st.subheader("Panel Analityczny (Ostatnie 30 dni)")
     
     dzisiaj_okres = pd.Timestamp.now().normalize()
@@ -65,13 +85,11 @@ try:
 
     if not df_miesiac.empty:
         
-        # --- MODUŁ KPI (EKWIWALENTY SPOŻYCIA) ---
         total_etanol = df_miesiac['Czysty etanol [g]'].sum()
         
-        # Obliczenia fizykochemiczne jednostek referencyjnych (zaktualizowane zaokrąglenia)
-        eq_kufle = int(round(total_etanol / 19.725, 0))  # Rzutowanie na int (całości)
-        eq_shoty = int(round(total_etanol / 12.624, 0))  # Rzutowanie na int (całości)
-        eq_flaszki = round(total_etanol / 220.92, 1)     # Zostaje 1 miejsce po przecinku
+        eq_kufle = int(round(total_etanol / 19.725, 0))  
+        eq_shoty = int(round(total_etanol / 12.624, 0))  
+        eq_flaszki = round(total_etanol / 220.92, 1)     
         
         st.markdown("**Twój urobek z ostatnich 30 dni w przeliczeniu na:**")
         kpi1, kpi2, kpi3 = st.columns(3)
