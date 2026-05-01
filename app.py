@@ -44,11 +44,11 @@ try:
     miesiac_temu = dzisiaj - pd.Timedelta(days=30)
     df_miesiac = df[df['Data'] >= miesiac_temu]
 
-   if not df_miesiac.empty:
-        # Agregacja bez ustawiania daty jako indeksu (as_index=False to tutaj life-saver)
+    if not df_miesiac.empty:
+        # Agregacja bez ustawiania daty jako indeksu (ratuje oś X)
         df_chart = df_miesiac.groupby('Data', as_index=False)['Czysty etanol [g]'].sum()
         
-        # Tłumaczymy datę na format DD.MM, żeby wykres był czytelny i się nie krztusił
+        # Tłumaczymy datę na format DD.MM, żeby wykres był czytelny
         df_chart['Data_str'] = df_chart['Data'].dt.strftime('%d.%m')
         
         # Rysujemy słupki jak krowie na rowie - podajemy co jest X, a co Y
