@@ -58,7 +58,6 @@ try:
     
     df['Dzień tygodnia'] = df['Data'].dt.day_name().map(dni_map)
     df['Miesiąc'] = df['Data'].dt.month_name().map(miesiace_map)
-    # Wymuszenie odpowiedniego sortowania dni tygodnia na osi X
     kolejnosc_dni = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek', 'Sobota', 'Niedziela']
 
     # --- INTERFEJS GŁÓWNY ---
@@ -76,12 +75,65 @@ try:
     else:
         st.success(f"🛡️ Licznik trzeźwości: {streak} dni. Wątroba zgłasza proces regeneracji.")
 
+    # --- TABELA WPISÓW ---
     st.subheader("Ostatnie wpisy")
     df_display = df.copy()
+    
+    # Skracanie dni tygodnia i formatowanie daty
+    skroty_dni = {'Poniedziałek': 'Pon', 'Wtorek': 'Wto', 'Środa': 'Śro', 'Czwartek': 'Czw', 'Piątek': 'Pią', 'Sobota': 'Sob', 'Niedziela': 'Nie'}
+    df_display['Dzień'] = df_display['Dzień tygodnia'].map(skroty_dni)
     df_display['Data'] = df_display['Data'].dt.strftime('%d.%m.%Y')
-    st.dataframe(df_display.tail(10))
+    
+    # Wybór i reorganizacja kolumn (ukrywamy stary Dzień tygodnia i Miesiąc)
+    kolumny_widoczne = ['Dzień', 'Data', 'Alkohol', 'Ilość [ml]', 'Moc [%]', 'Czysty etanol [g]']
+    df_display = df_display[kolumny_widoczne]
+    
+    # Streamlit w wersji wyższej obsługuje hide_index=True
+    st.dataframe(df_display.tail(10), hide_index=True)
 
-    # --- PANEL ANALITYCZNY 30-DNIOWY ---
+    # --- KALENDARZ MIESIĘCZNY (HEATMAP) ---
+    st.subheader(f"📅 Kalendarz Spożycia ({dzisiaj.strftime('%m.%Y')})")
+    
+    # Generowanie siatki dla aktualnego miesiąca
+    poczatek_miesiaca = dzisiaj.replace(day=1)
+    koniec_miesiaca = (poczatek_miesiaca + pd.DateOffset(months=1)) - pd.Timedelta(days=1)
+    
+    dni_miesiaca = pd.date_range(start=poczatek_miesiaca, end=koniec_miesiaca, freq='D')
+    df_kalendarz = pd.DataFrame({'Data': dni_miesiaca})
+    
+    # Połączenie pełnego kalendarza z danymi o etanolu
+    df_etanol_dziennie = df.groupby('Data')['Czysty etanol [g]'].sum().reset_index()
+    df_kalendarz = df_kalendarz.merge(df_etanol_dziennie, on='Data', how='left').fillna(0)
+    
+    # Obliczanie współrzędnych do siatki (Kolumna = Dzień, Wiersz = Tydzień)
+    nazwy_krotkie = {0: 'Pon', 1: 'Wto', 2: 'Śro', 3: 'Czw', 4: 'Pią', 5: 'Sob', 6: 'Nie'}
+    df_kalendarz['Nazwa_dnia'] = df_kalendarz['Data'].dt.dayofweek.map(nazwy_krotkie)
+    df_kalendarz['Dzień_miesiąca'] = df_kalendarz['Data'].dt.day.astype(str)
+    # Logika układania wierszy kalendarza
+    df_kalendarz['Rząd_tygodnia'] = df_kalendarz['Data'].apply(lambda d: (d.day - 1 + d.replace(day=1).weekday()) // 7)
+    
+    kolejnosc_kalendarza = ['Pon', 'Wto', 'Śro', 'Czw', 'Pią', 'Sob', 'Nie']
+    
+    # Geometria kafelków
+    heatmap = alt.Chart(df_kalendarz).mark_rect(stroke='gray', strokeWidth=0.5, cornerRadius=3).encode(
+        x=alt.X('Nazwa_dnia:N', sort=kolejnosc_kalendarza, title=None, axis=alt.Axis(labelAngle=0, labelPadding=10)),
+        y=alt.Y('Rząd_tygodnia:O', title=None, sort='descending', axis=alt.Axis(labels=False, ticks=False)), # Ukryte indeksy y
+        color=alt.Color('Czysty etanol [g]:Q', scale=alt.Scale(scheme='reds'), legend=alt.Legend(title="Etanol (g)")),
+        tooltip=['Data', 'Czysty etanol [g]']
+    ).properties(height=250)
+    
+    # Geometria tekstu (numerki dni)
+    text = alt.Chart(df_kalendarz).mark_text(baseline='middle').encode(
+        x=alt.X('Nazwa_dnia:N', sort=kolejnosc_kalendarza),
+        y=alt.Y('Rząd_tygodnia:O', sort='descending'),
+        text=alt.Text('Dzień_miesiąca:N'),
+        # Zmiana koloru tekstu jeśli kafelek jest bardzo ciemny
+        color=alt.condition(alt.datum['Czysty etanol [g]'] > 60, alt.value('white'), alt.value('black'))
+    )
+
+    st.altair_chart(heatmap + text, use_container_width=True)
+
+    # --- PANEL OPERACYJNY 30-DNIOWY ---
     st.subheader("Panel (Ostatnie 30 dni)")
     
     miesiac_temu = dzisiaj - pd.Timedelta(days=30)
@@ -131,17 +183,14 @@ try:
 
     st.divider()
 
-    # --- ANALITYKA HISTORYCZNA I BEHAWIORALNA ---
+    # --- ANALITYKA HISTORYCZNA ---
     st.subheader("Analiza Historyczna")
     
     tab1, tab2, tab3 = st.tabs(["📅 Rozkład Tygodniowy", "📈 Podsumowanie Miesięcy", "🏆 Hall of Shame (Top 3)"])
     
-   # 1. Rozkład dni tygodnia
     with tab1:
         st.markdown("**Ile ŚREDNIO wlewam w siebie w dany dzień tygodnia?**")
         df_dni = df.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
-        
-        # Zmiana z sum() na mean() i zaokrąglenie do 1 miejsca po przecinku
         df_dni = df_dni.groupby('Dzień tygodnia')['Etanol (g)'].mean().round(1).reset_index()
         
         bar_dni = alt.Chart(df_dni).mark_bar(color='#9b59b6').encode(
@@ -151,12 +200,9 @@ try:
         ).properties(height=300)
         st.altair_chart(bar_dni, use_container_width=True)
 
-    # 2. Podsumowanie miesięczne
     with tab2:
         st.markdown("**Ile ŚREDNIO wlewam w siebie w dany miesiąc**")
         df_miesiace = df.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
-        
-        # Zmiana z sum() na mean()
         df_miesiace = df_miesiace.groupby('Miesiąc')['Etanol (g)'].mean().round(1).reset_index()
         
         bar_miesiace = alt.Chart(df_miesiace).mark_bar(color='#f39c12').encode(
@@ -166,9 +212,8 @@ try:
         ).properties(height=300)
         st.altair_chart(bar_miesiace, use_container_width=True)
 
-    # 3. Podium - Top 3 Dni
     with tab3:
-        st.markdown("**Dni największego voltarzu:**")
+        st.markdown("**Dni największego woltażu:**")
         df_podium = df.groupby('Data')['Czysty etanol [g]'].sum().reset_index()
         df_podium = df_podium.sort_values(by='Czysty etanol [g]', ascending=False).head(3).reset_index(drop=True)
         
@@ -177,7 +222,6 @@ try:
             for i, row in df_podium.iterrows():
                 data_format = row['Data'].strftime('%d.%m.%Y')
                 gramy = row['Czysty etanol [g]']
-                
                 eq_kufle_podium = int(round(gramy / 19.725, 0)) 
                 
                 st.markdown(f"### {medale[i]} **{data_format}**")
