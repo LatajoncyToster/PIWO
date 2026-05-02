@@ -52,7 +52,7 @@ try:
     
     df['Data'] = pd.to_datetime(df['Data'], format='%d.%m.%Y')
     
-    # Inżynieria cech czasowych dla analityki zaawansowanej
+    # Inżynieria cech czasowych
     dni_map = {'Monday': 'Poniedziałek', 'Tuesday': 'Wtorek', 'Wednesday': 'Środa', 'Thursday': 'Czwartek', 'Friday': 'Piątek', 'Saturday': 'Sobota', 'Sunday': 'Niedziela'}
     miesiace_map = {'January': 'Styczeń', 'February': 'Luty', 'March': 'Marzec', 'April': 'Kwiecień', 'May': 'Maj', 'June': 'Czerwiec', 'July': 'Lipiec', 'August': 'Sierpień', 'September': 'Wrzesień', 'October': 'Październik', 'November': 'Listopad', 'December': 'Grudzień'}
     
@@ -90,10 +90,30 @@ try:
     
     st.dataframe(df_display.tail(10), hide_index=True)
 
-    # --- KALENDARZ MIESIĘCZNY (HEATMAP) ---
-    st.subheader(f"📅 Kalendarz Spożycia ({dzisiaj.strftime('%m.%Y')})")
+    # --- INTERAKTYWNY KALENDARZ MIESIĘCZNY (HEATMAP) ---
+    st.subheader("📅 Kalendarz Spożycia")
     
-    poczatek_miesiaca = dzisiaj.replace(day=1)
+    # Inicjalizacja stanu sesji dla nawigacji
+    if 'kalendarz_offset' not in st.session_state:
+        st.session_state.kalendarz_offset = 0
+
+    col_btn_l, col_miesiac, col_btn_r = st.columns([1, 2, 1])
+    
+    with col_btn_l:
+        if st.button("⬅️ Poprzedni"):
+            st.session_state.kalendarz_offset -= 1
+            
+    with col_btn_r:
+        if st.button("Następny ➡️"):
+            st.session_state.kalendarz_offset += 1
+
+    # Obliczenie analizowanej daty na podstawie offsetu
+    aktywna_data = dzisiaj + pd.DateOffset(months=st.session_state.kalendarz_offset)
+    
+    with col_miesiac:
+        st.markdown(f"<h4 style='text-align: center; margin-top: 0px;'>{aktywna_data.strftime('%m.%Y')}</h4>", unsafe_allow_html=True)
+
+    poczatek_miesiaca = aktywna_data.replace(day=1)
     koniec_miesiaca = (poczatek_miesiaca + pd.DateOffset(months=1)) - pd.Timedelta(days=1)
     
     dni_miesiaca = pd.date_range(start=poczatek_miesiaca, end=koniec_miesiaca, freq='D')
@@ -133,31 +153,26 @@ try:
     miesiac_temu = dzisiaj - pd.Timedelta(days=30)
     dwa_miesiace_temu = dzisiaj - pd.Timedelta(days=60)
     
-    # Ekstrakcja danych dla bieżącego i poprzedniego okna 30-dniowego
     df_miesiac = df[df['Data'] >= miesiac_temu]
     df_poprzedni_miesiac = df[(df['Data'] >= dwa_miesiace_temu) & (df['Data'] < miesiac_temu)]
 
     if not df_miesiac.empty:
-        # Kalkulacje bieżące
         total_etanol = df_miesiac['Czysty etanol [g]'].sum()
         eq_kufle = int(round(total_etanol / 19.725, 0))  
         eq_shoty = int(round(total_etanol / 12.624, 0))  
         eq_flaszki = round(total_etanol / 220.92, 1)     
         
-        # Kalkulacje historyczne (baza do obliczenia delty)
         total_etanol_poprzedni = df_poprzedni_miesiac['Czysty etanol [g]'].sum() if not df_poprzedni_miesiac.empty else 0
         eq_kufle_poprzednie = int(round(total_etanol_poprzedni / 19.725, 0))
         eq_shoty_poprzednie = int(round(total_etanol_poprzedni / 12.624, 0))
         eq_flaszki_poprzednie = round(total_etanol_poprzedni / 220.92, 1)
         
-        # Ostateczna kalkulacja różnicowa
         delta_kufle = eq_kufle - eq_kufle_poprzednie
         delta_shoty = eq_shoty - eq_shoty_poprzednie
         delta_flaszki = round(eq_flaszki - eq_flaszki_poprzednie, 1)
         
         st.markdown("**Twój urobek z ostatnich 30 dni w przeliczeniu na:**")
         kpi1, kpi2, kpi3 = st.columns(3)
-        # Zastosowanie parametru delta_color="inverse" (wzrost na czerwono, spadek na zielono)
         kpi1.metric(label="🍺 Kufle piwa (5%)", value=eq_kufle, delta=delta_kufle, delta_color="inverse")
         kpi2.metric(label="🥃 Shoty wódki (40ml)", value=eq_shoty, delta=delta_shoty, delta_color="inverse")
         kpi3.metric(label="🍾 Flaszki 0.7 (40%)", value=eq_flaszki, delta=delta_flaszki, delta_color="inverse")
