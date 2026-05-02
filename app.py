@@ -62,7 +62,7 @@ try:
         
         col_btn1, col_btn2 = st.columns(2)
         with col_btn1:
-            if st.button("⏪ Cofnij ostatni wpis"):
+            if st.button("⏪ Cofnij"):
                 try:
                     wszystkie_dane = sheet.get_all_values()
                     if len(wszystkie_dane) > 1: 
