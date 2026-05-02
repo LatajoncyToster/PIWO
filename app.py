@@ -231,7 +231,6 @@ try:
         alt.Color('Etanol (g):Q', scale=alt.Scale(scheme='reds'), legend=alt.Legend(title="Etanol (g/tydz)"))
     )
 
-    # Zmiana: dodano czytelny opis osi X pod wykresem, żeby było wiadomo gdzie jest teraz
     heatmap_tygodniowa = alt.Chart(df_heatmap_tyg).mark_rect(stroke='#2d303e', strokeWidth=1, cornerRadius=2).encode(
         x=alt.X('Tydzień_Num:O', title='Starsze tygodnie ➔ Aktualny tydzień (Teraz)', axis=alt.Axis(labels=False, ticks=False)),
         y=alt.Y('Wiersz:N', title=None, axis=alt.Axis(labels=False, ticks=False)), 
@@ -295,10 +294,11 @@ try:
             df_chart_line = df_chart_line.rename(columns={'index': 'Data'})
             df_chart_line['Trend (3-dniowy)'] = df_chart_line['Czysty etanol [g]'].rolling(window=3, min_periods=1).mean()
 
+            # ZMIANA: Dodano orient="bottom" do legendy, żeby nie niszczyła wykresu na smartfonie
             base_bars = alt.Chart(df_chart_bars).mark_bar(size=15).encode(
                 x=alt.X('yearmonthdate(Data):O', title='Data', axis=alt.Axis(format='%d.%m', labelAngle=-90)),
                 y=alt.Y('Etanol (g):Q', title='Spożycie (g)'),
-                color=alt.Color('Alkohol:N', scale=kolory_alko, legend=alt.Legend(title="Trunek")),
+                color=alt.Color('Alkohol:N', scale=kolory_alko, legend=alt.Legend(title="Trunek", orient="bottom")),
                 tooltip=[alt.Tooltip('Data:T', format='%d.%m.%Y', title='Data'), 'Alkohol', 'Etanol (g)']
             )
             
@@ -313,9 +313,10 @@ try:
             st.markdown("**Struktura spożycia**")
             df_donut = df_miesiac.rename(columns={'Czysty etanol [g]': 'Etanol (g)'}).groupby('Alkohol')['Etanol (g)'].sum().reset_index()
             
+            # ZMIANA: Legenda też na dół dla spójności
             donut = alt.Chart(df_donut).mark_arc(innerRadius=50).encode(
                 theta=alt.Theta(field="Etanol (g)", type="quantitative"),
-                color=alt.Color(field="Alkohol", type="nominal", scale=kolory_alko, legend=alt.Legend(title="Trunek")),
+                color=alt.Color(field="Alkohol", type="nominal", scale=kolory_alko, legend=alt.Legend(title="Trunek", orient="bottom")),
                 tooltip=['Alkohol', alt.Tooltip('Etanol (g)', format='.1f')]
             ).properties(height=350)
             
@@ -360,7 +361,6 @@ try:
             y=alt.Y('Etanol (g):Q')
         )
         
-        # ZMIANA: Właściwe podpięcie właściwości przed wrzuceniem do st.altair_chart
         wykres_miesieczny = (bar_miesiace + line_miesiace).properties(height=300)
         st.altair_chart(wykres_miesieczny, use_container_width=True)
 
