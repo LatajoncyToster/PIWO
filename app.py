@@ -62,12 +62,12 @@ try:
         
         col_btn1, col_btn2 = st.columns(2)
         with col_btn1:
-            if st.button("🗑️ Usuń ostatni wiersz"):
+            if st.button("⏪ Cofnij ostatni wpis"):
                 try:
                     wszystkie_dane = sheet.get_all_values()
                     if len(wszystkie_dane) > 1: 
                         sheet.delete_row(len(wszystkie_dane))
-                        st.success("Ostatni rekord usunięty z bazy.")
+                        st.success("Cofnięto wpis.")
                         st.rerun()
                     else:
                         st.warning("Brak wpisów.")
@@ -125,7 +125,6 @@ try:
     else:
         st.success(f"🛡️ Licznik trzeźwości: {streak} dni. Wątroba zgłasza proces regeneracji.")
 
-    # Tabela i stary kalendarz miesięczny obok siebie
     col_top1, col_top2 = st.columns(2)
 
     with col_top1:
@@ -199,26 +198,28 @@ try:
 
         st.altair_chart(heatmap + text, use_container_width=True)
 
-    # --- NOWA ROCZNA MAPA (TYGODNIOWA, POZIOMA) ---
+    # --- PANCERNA ROCZNA MAPA ZNISZCZENIA (MATEMATYCZNA) ---
     st.subheader("🗓️ Roczna Mapa Zniszczenia (Tygodnie od lewej do prawej)")
     
-    # Wygenerowanie dokładnie 52 tygodni do tyłu
-    rok_temu_tydzien = dzisiaj - pd.Timedelta(weeks=52)
-    df_52 = df[df['Data'] > rok_temu_tydzien].copy()
+    rok_temu_tydzien = dzisiaj - pd.Timedelta(days=364)
+    df_52 = df[df['Data'] >= rok_temu_tydzien].copy()
     
-    okresy = pd.date_range(end=dzisiaj, periods=52, freq='W')
-    df_tygodnie = pd.DataFrame({'Data_Konca_Tygodnia': okresy})
+    # Tworzymy sztywny szkielet dla 52 tygodni (od 51 do 0, gdzie 0 to obecny tydzień)
+    df_tygodnie = pd.DataFrame({'Tydzień_Offset': range(51, -1, -1)})
     
-    # Grupowanie danych po tygodniach
     if not df_52.empty:
-        df_52 = df_52.set_index('Data')
-        weekly_sum = df_52['Czysty etanol [g]'].resample('W').sum().reset_index()
-        weekly_sum.rename(columns={'Data': 'Data_Konca_Tygodnia'}, inplace=True)
-        df_heatmap_tyg = pd.merge(df_tygodnie, weekly_sum, on='Data_Konca_Tygodnia', how='left').fillna(0)
+        # Obliczamy matematycznie ile tygodni temu był dany wpis
+        df_52['Tydzień_Offset'] = ((dzisiaj - df_52['Data']).dt.days // 7)
+        # Bierzemy pod uwagę tylko wpisy łapiące się w 52 oknach
+        df_52 = df_52[df_52['Tydzień_Offset'] <= 51]
+        
+        weekly_sum = df_52.groupby('Tydzień_Offset')['Czysty etanol [g]'].sum().reset_index()
+        df_heatmap_tyg = pd.merge(df_tygodnie, weekly_sum, on='Tydzień_Offset', how='left').fillna(0)
     else:
         df_heatmap_tyg = df_tygodnie.copy()
         df_heatmap_tyg['Czysty etanol [g]'] = 0
 
+    # Tworzymy ostateczną numerację od lewej do prawej (od 1 do 52)
     df_heatmap_tyg['Tydzień_Num'] = range(1, 53)
     df_heatmap_tyg['Wiersz'] = 'Postęp w roku'
     df_heatmap_tyg = df_heatmap_tyg.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
@@ -233,7 +234,7 @@ try:
         x=alt.X('Tydzień_Num:O', title='Kolejne tygodnie w roku (Od najstarszego do teraz)', axis=alt.Axis(labels=False, ticks=False)),
         y=alt.Y('Wiersz:N', title=None, axis=alt.Axis(labels=False, ticks=False)), 
         color=kolorowanie_tygodni,
-        tooltip=[alt.Tooltip('Data_Konca_Tygodnia:T', title='Tydzień kończący się', format='%d.%m.%Y'), 'Etanol (g)']
+        tooltip=['Etanol (g)']
     ).properties(height=80)
 
     st.altair_chart(heatmap_tygodniowa, use_container_width=True)
@@ -273,7 +274,7 @@ try:
         st.divider() 
         col1, col2 = st.columns([2, 1])
         
-        # Mapa kolorów dla trunków przeniesiona do sekcji trendów
+        # Mapa kolorów dla trunków w trendach
         kolory_alko = alt.Scale(
             domain=['Piwo', 'Wódka kolorowa', 'Wódka', 'Wino', 'Inne'],
             range=['#f1c40f', '#e84393', '#ffffff', '#e74c3c', '#95a5a6']
@@ -282,7 +283,6 @@ try:
         with col1:
             st.markdown("**Trendy spożycia i uśredniony ciąg (z podziałem na kolory trunków)**")
             
-            # Wymagane agregowanie z podziałem na alkohol do kolorowych słupków
             df_chart_bars = df_miesiac.groupby(['Data', 'Alkohol'])['Czysty etanol [g]'].sum().reset_index()
             df_chart_bars['Data_str'] = df_chart_bars['Data'].dt.strftime('%d.%m')
             df_chart_bars = df_chart_bars.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
@@ -294,7 +294,6 @@ try:
             df_chart_line['index_str'] = df_chart_line['index'].dt.strftime('%d.%m')
             df_chart_line['Trend (3-dniowy)'] = df_chart_line['Czysty etanol [g]'].rolling(window=3, min_periods=1).mean()
 
-            # Słupki warstwowe (Stacked Bars)
             base_bars = alt.Chart(df_chart_bars).mark_bar().encode(
                 x=alt.X('Data_str:N', sort=None, title='Data'),
                 y=alt.Y('Etanol (g):Q', title='Spożycie (g)'),
@@ -302,7 +301,6 @@ try:
                 tooltip=['Data_str', 'Alkohol', 'Etanol (g)']
             )
             
-            # Linia trendu nałożona na słupki
             base_line = alt.Chart(df_chart_line).mark_line(color='#3498db', size=3).encode(
                 x=alt.X('index_str:N', sort=None),
                 y=alt.Y('Trend (3-dniowy):Q')
@@ -311,10 +309,9 @@ try:
             st.altair_chart(base_bars + base_line, use_container_width=True)
             
         with col2:
-            st.markdown("**Struktura spożycia (Powrót do koła)**")
+            st.markdown("**Struktura spożycia**")
             df_donut = df_miesiac.rename(columns={'Czysty etanol [g]': 'Etanol (g)'}).groupby('Alkohol')['Etanol (g)'].sum().reset_index()
             
-            # Tutaj też aplikujemy te same kolory co na słupkach
             donut = alt.Chart(df_donut).mark_arc(innerRadius=50).encode(
                 theta=alt.Theta(field="Etanol (g)", type="quantitative"),
                 color=alt.Color(field="Alkohol", type="nominal", scale=kolory_alko, legend=alt.Legend(title="Trunek")),
@@ -337,7 +334,7 @@ try:
         df_dni = df.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
         df_dni = df_dni.groupby('Dzień tygodnia')['Etanol (g)'].mean().round(1).reset_index()
         
-        # Zwykły fioletowy kolor jak było pierwotnie
+        # Zwykły fioletowy kolor
         bar_dni = alt.Chart(df_dni).mark_bar(color='#9b59b6').encode(
             x=alt.X('Dzień tygodnia:N', sort=kolejnosc_dni, title='Dzień tygodnia'),
             y=alt.Y('Etanol (g):Q', title='Średnio etanolu (g) / posiedzenie'),
@@ -351,6 +348,7 @@ try:
         df_miesiace = df_miesiace[df_miesiace['Miesiąc'] != 'Kwiecień']
         df_miesiace = df_miesiace.groupby('Miesiąc')['Etanol (g)'].mean().round(1).reset_index()
         
+        # Zwykły pomarańczowy kolor
         bar_miesiace = alt.Chart(df_miesiace).mark_bar(color='#f39c12').encode(
             x=alt.X('Miesiąc:N', sort=kolejnosc_miesiecy, title='Miesiąc'),
             y=alt.Y('Etanol (g):Q', title='Średnio etanolu (g) / posiedzenie'),
