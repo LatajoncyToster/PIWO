@@ -66,7 +66,8 @@ try:
                 try:
                     wszystkie_dane = sheet.get_all_values()
                     if len(wszystkie_dane) > 1: 
-                        sheet.delete_row(len(wszystkie_dane))
+                        # ZMIANA: Zastosowano prawidłową, nowoczesną metodę dla biblioteki gspread
+                        sheet.delete_rows(len(wszystkie_dane))
                         st.success("Cofnięto wpis.")
                         st.rerun()
                     else:
@@ -266,7 +267,6 @@ try:
         delta_shoty = eq_shoty - eq_shoty_poprzednie
         delta_flaszki = round(eq_flaszki - eq_flaszki_poprzednie, 1)
         
-        # ZMIANA: Zaktualizowany opis nad kafelkami (usunięto słowo 'urobek')
         st.markdown("**Alkohol wypity w ostatnich 30 dniach w przeliczeniu na:**")
         kpi1, kpi2, kpi3 = st.columns(3)
         kpi1.metric(label="🍺 Kufle piwa (5%)", value=eq_kufle, delta=delta_kufle, delta_color="inverse")
