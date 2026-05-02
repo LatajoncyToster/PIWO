@@ -201,14 +201,12 @@ try:
     # --- PANCERNA ROCZNA MAPA ZNISZCZENIA (PON - NIE) ---
     st.subheader("🗓️ Tygodnie")
     
-    # Wyliczamy datę najbliższej niedzieli, aby wyrównać tygodnie do formatu (Poniedziałek-Niedziela)
     najblizsza_niedziela = dzisiaj + pd.Timedelta(days=(6 - dzisiaj.dayofweek))
     rok_temu_tydzien = najblizsza_niedziela - pd.Timedelta(days=364)
     
     df_52 = df[df['Data'] >= rok_temu_tydzien].copy()
     df_tygodnie = pd.DataFrame({'Tydzień_Offset': range(51, -1, -1)})
     
-    # Koniec tygodnia to zawsze Niedziela
     df_tygodnie['Koniec_Tyg'] = najblizsza_niedziela - pd.to_timedelta(df_tygodnie['Tydzień_Offset'] * 7, unit='D')
     df_tygodnie['Poczatek_Tyg'] = df_tygodnie['Koniec_Tyg'] - pd.Timedelta(days=6)
     df_tygodnie['Zakres_Dat'] = df_tygodnie['Poczatek_Tyg'].dt.strftime('%d.%m') + " - " + df_tygodnie['Koniec_Tyg'].dt.strftime('%d.%m')
@@ -233,8 +231,9 @@ try:
         alt.Color('Etanol (g):Q', scale=alt.Scale(scheme='reds'), legend=alt.Legend(title="Etanol (g/tydz)"))
     )
 
+    # Zmiana: dodano czytelny opis osi X pod wykresem, żeby było wiadomo gdzie jest teraz
     heatmap_tygodniowa = alt.Chart(df_heatmap_tyg).mark_rect(stroke='#2d303e', strokeWidth=1, cornerRadius=2).encode(
-        x=alt.X('Tydzień_Num:O', title=None, axis=alt.Axis(labels=False, ticks=False)),
+        x=alt.X('Tydzień_Num:O', title='Starsze tygodnie ➔ Aktualny tydzień (Teraz)', axis=alt.Axis(labels=False, ticks=False)),
         y=alt.Y('Wiersz:N', title=None, axis=alt.Axis(labels=False, ticks=False)), 
         color=kolorowanie_tygodni,
         tooltip=[alt.Tooltip('Zakres_Dat:N', title='Okres'), 'Etanol (g)']
@@ -296,7 +295,6 @@ try:
             df_chart_line = df_chart_line.rename(columns={'index': 'Data'})
             df_chart_line['Trend (3-dniowy)'] = df_chart_line['Czysty etanol [g]'].rolling(window=3, min_periods=1).mean()
 
-            # Zastosowanie yearmonthdate(Data):O wymusza natywne sortowanie chronologiczne Altair
             base_bars = alt.Chart(df_chart_bars).mark_bar(size=15).encode(
                 x=alt.X('yearmonthdate(Data):O', title='Data', axis=alt.Axis(format='%d.%m', labelAngle=-90)),
                 y=alt.Y('Etanol (g):Q', title='Spożycie (g)'),
@@ -362,7 +360,9 @@ try:
             y=alt.Y('Etanol (g):Q')
         )
         
-        st.altair_chart(bar_miesiace + line_miesiace, use_container_width=True).properties(height=300)
+        # ZMIANA: Właściwe podpięcie właściwości przed wrzuceniem do st.altair_chart
+        wykres_miesieczny = (bar_miesiace + line_miesiace).properties(height=300)
+        st.altair_chart(wykres_miesieczny, use_container_width=True)
 
     with tab3:
         st.markdown("**Dni największego woltażu:**")
