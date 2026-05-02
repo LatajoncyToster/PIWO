@@ -38,6 +38,20 @@ try:
                     st.rerun() 
                 except Exception as e:
                     st.error(f"Błąd zapisu do chmury: {e}")
+                    
+        st.divider()
+        st.subheader("🗑️ Zarządzanie błędami")
+        if st.button("⏪ Cofnij ostatni wpis"):
+            try:
+                wszystkie_dane = sheet.get_all_values()
+                if len(wszystkie_dane) > 1: # Weryfikacja: ochrona nagłówków tabeli (wiersz 1)
+                    sheet.delete_row(len(wszystkie_dane))
+                    st.success("Ostatni wpis został permanentnie usunięty.")
+                    st.rerun()
+                else:
+                    st.warning("Brak wpisów w bazie. Nie można usunąć nagłówków.")
+            except Exception as e:
+                st.error(f"Błąd połączenia z bazą: {e}")
 
     # --- POBIERANIE I CZYSZCZENIE DANYCH ---
     data = sheet.get_all_records()
@@ -93,7 +107,6 @@ try:
     # --- INTERAKTYWNY KALENDARZ MIESIĘCZNY (HEATMAP) ---
     st.subheader("📅 Kalendarz Spożycia")
     
-    # Inicjalizacja stanu sesji dla nawigacji
     if 'kalendarz_offset' not in st.session_state:
         st.session_state.kalendarz_offset = 0
 
@@ -107,7 +120,6 @@ try:
         if st.button("Następny ➡️"):
             st.session_state.kalendarz_offset += 1
 
-    # Obliczenie analizowanej daty na podstawie offsetu
     aktywna_data = dzisiaj + pd.DateOffset(months=st.session_state.kalendarz_offset)
     
     with col_miesiac:
