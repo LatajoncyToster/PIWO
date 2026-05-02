@@ -198,7 +198,7 @@ try:
 
         st.altair_chart(heatmap + text, use_container_width=True)
 
-    # --- PANCERNA ROCZNA MAPA ZNISZCZENIA (MATEMATYCZNA Z DATAMI) ---
+    # --- PANCERNA ROCZNA MAPA ZNISZCZENIA ---
     st.subheader("🗓️ Tygodnie")
     
     rok_temu_tydzien = dzisiaj - pd.Timedelta(days=364)
@@ -206,7 +206,6 @@ try:
     
     df_tygodnie = pd.DataFrame({'Tydzień_Offset': range(51, -1, -1)})
     
-    # Dodanie generowania zakresów dat dla tooltipa (np. 27.04 - 03.05)
     df_tygodnie['Koniec_Tyg'] = dzisiaj - pd.to_timedelta(df_tygodnie['Tydzień_Offset'] * 7, unit='D')
     df_tygodnie['Poczatek_Tyg'] = df_tygodnie['Koniec_Tyg'] - pd.Timedelta(days=6)
     df_tygodnie['Zakres_Dat'] = df_tygodnie['Poczatek_Tyg'].dt.strftime('%d.%m') + " - " + df_tygodnie['Koniec_Tyg'].dt.strftime('%d.%m')
@@ -294,15 +293,18 @@ try:
             df_chart_line['index_str'] = df_chart_line['index'].dt.strftime('%d.%m')
             df_chart_line['Trend (3-dniowy)'] = df_chart_line['Czysty etanol [g]'].rolling(window=3, min_periods=1).mean()
 
+            # FIX: Twarde sortowanie po wygenerowanej chronologicznej liście
+            chronologiczne_daty = df_chart_line['index_str'].tolist()
+
             base_bars = alt.Chart(df_chart_bars).mark_bar().encode(
-                x=alt.X('Data_str:N', sort=None, title='Data'),
+                x=alt.X('Data_str:N', sort=chronologiczne_daty, title='Data'),
                 y=alt.Y('Etanol (g):Q', title='Spożycie (g)'),
                 color=alt.Color('Alkohol:N', scale=kolory_alko, legend=alt.Legend(title="Trunek")),
                 tooltip=['Data_str', 'Alkohol', 'Etanol (g)']
             )
             
             base_line = alt.Chart(df_chart_line).mark_line(color='#3498db', size=3).encode(
-                x=alt.X('index_str:N', sort=None),
+                x=alt.X('index_str:N', sort=chronologiczne_daty),
                 y=alt.Y('Trend (3-dniowy):Q')
             )
             
