@@ -283,28 +283,27 @@ try:
             st.markdown("**Trend**")
             
             df_chart_bars = df_miesiac.groupby(['Data', 'Alkohol'])['Czysty etanol [g]'].sum().reset_index()
-            df_chart_bars['Data_str'] = df_chart_bars['Data'].dt.strftime('%d.%m')
             df_chart_bars = df_chart_bars.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
             
             df_chart_line = df_miesiac.groupby('Data')['Czysty etanol [g]'].sum().reset_index()
             min_date = df_chart_line['Data'].min()
             full_date_range = pd.date_range(start=min_date, end=dzisiaj, freq='D')
+            
+            # Reindeksowanie dla wypełnienia pustych dni, by linia trendu była ciągła
             df_chart_line = df_chart_line.set_index('Data').reindex(full_date_range, fill_value=0).reset_index()
-            df_chart_line['index_str'] = df_chart_line['index'].dt.strftime('%d.%m')
+            df_chart_line = df_chart_line.rename(columns={'index': 'Data'})
             df_chart_line['Trend (3-dniowy)'] = df_chart_line['Czysty etanol [g]'].rolling(window=3, min_periods=1).mean()
 
-            # FIX: Twarde sortowanie po wygenerowanej chronologicznej liście
-            chronologiczne_daty = df_chart_line['index_str'].tolist()
-
+            # Zmiana: Data:O wymusza traktowanie daty jako kategorii, chronologicznie
             base_bars = alt.Chart(df_chart_bars).mark_bar().encode(
-                x=alt.X('Data_str:N', sort=chronologiczne_daty, title='Data'),
+                x=alt.X('Data:O', title='Data', axis=alt.Axis(format='%d.%m', labelAngle=-90)),
                 y=alt.Y('Etanol (g):Q', title='Spożycie (g)'),
                 color=alt.Color('Alkohol:N', scale=kolory_alko, legend=alt.Legend(title="Trunek")),
-                tooltip=['Data_str', 'Alkohol', 'Etanol (g)']
+                tooltip=[alt.Tooltip('Data:T', format='%d.%m.%Y', title='Data'), 'Alkohol', 'Etanol (g)']
             )
             
             base_line = alt.Chart(df_chart_line).mark_line(color='#3498db', size=3).encode(
-                x=alt.X('index_str:N', sort=chronologiczne_daty),
+                x=alt.X('Data:O', sort=None),
                 y=alt.Y('Trend (3-dniowy):Q')
             )
             
@@ -332,7 +331,7 @@ try:
     tab1, tab2, tab3 = st.tabs(["📅 Rozkład Tygodniowy", "📈 Podsumowanie Miesięcy", "🏆 Top 3"])
     
     with tab1:
-        st.markdown("**Ile ŚREDNIO wlewam w siebie w dany dzień tygodnia?**")
+        st.markdown("**Średnia**")
         df_dni = df.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
         df_dni = df_dni.groupby('Dzień tygodnia')['Etanol (g)'].mean().round(1).reset_index()
         
@@ -344,7 +343,7 @@ try:
         st.altair_chart(bar_dni, use_container_width=True)
 
     with tab2:
-        st.markdown("**Ile ŚREDNIO wlewam w siebie w dany miesiąc**")
+        st.markdown("**Średnia**")
         df_miesiace = df.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
         df_miesiace = df_miesiace[df_miesiace['Miesiąc'] != 'Kwiecień']
         df_miesiace = df_miesiace.groupby('Miesiąc')['Etanol (g)'].mean().round(1).reset_index()
