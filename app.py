@@ -198,20 +198,23 @@ try:
 
         st.altair_chart(heatmap + text, use_container_width=True)
 
-    # --- PANCERNA ROCZNA MAPA ZNISZCZENIA ---
+    # --- PANCERNA ROCZNA MAPA ZNISZCZENIA (PON - NIE) ---
     st.subheader("🗓️ Tygodnie")
     
-    rok_temu_tydzien = dzisiaj - pd.Timedelta(days=364)
-    df_52 = df[df['Data'] >= rok_temu_tydzien].copy()
+    # Wyliczamy datę najbliższej niedzieli, aby wyrównać tygodnie do formatu (Poniedziałek-Niedziela)
+    najblizsza_niedziela = dzisiaj + pd.Timedelta(days=(6 - dzisiaj.dayofweek))
+    rok_temu_tydzien = najblizsza_niedziela - pd.Timedelta(days=364)
     
+    df_52 = df[df['Data'] >= rok_temu_tydzien].copy()
     df_tygodnie = pd.DataFrame({'Tydzień_Offset': range(51, -1, -1)})
     
-    df_tygodnie['Koniec_Tyg'] = dzisiaj - pd.to_timedelta(df_tygodnie['Tydzień_Offset'] * 7, unit='D')
+    # Koniec tygodnia to zawsze Niedziela
+    df_tygodnie['Koniec_Tyg'] = najblizsza_niedziela - pd.to_timedelta(df_tygodnie['Tydzień_Offset'] * 7, unit='D')
     df_tygodnie['Poczatek_Tyg'] = df_tygodnie['Koniec_Tyg'] - pd.Timedelta(days=6)
     df_tygodnie['Zakres_Dat'] = df_tygodnie['Poczatek_Tyg'].dt.strftime('%d.%m') + " - " + df_tygodnie['Koniec_Tyg'].dt.strftime('%d.%m')
     
     if not df_52.empty:
-        df_52['Tydzień_Offset'] = ((dzisiaj - df_52['Data']).dt.days // 7)
+        df_52['Tydzień_Offset'] = ((najblizsza_niedziela - df_52['Data']).dt.days // 7)
         df_52 = df_52[df_52['Tydzień_Offset'] <= 51]
         
         weekly_sum = df_52.groupby('Tydzień_Offset')['Czysty etanol [g]'].sum().reset_index()
@@ -283,7 +286,6 @@ try:
             st.markdown("**Trend**")
             
             df_chart_bars = df_miesiac.groupby(['Data', 'Alkohol'])['Czysty etanol [g]'].sum().reset_index()
-            df_chart_bars['Data_str'] = df_chart_bars['Data'].dt.strftime('%d.%m')
             df_chart_bars = df_chart_bars.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
             
             df_chart_line = df_miesiac.groupby('Data')['Czysty etanol [g]'].sum().reset_index()
@@ -291,19 +293,19 @@ try:
             full_date_range = pd.date_range(start=min_date, end=dzisiaj, freq='D')
             
             df_chart_line = df_chart_line.set_index('Data').reindex(full_date_range, fill_value=0).reset_index()
-            df_chart_line['index_str'] = df_chart_line['index'].dt.strftime('%d.%m')
+            df_chart_line = df_chart_line.rename(columns={'index': 'Data'})
             df_chart_line['Trend (3-dniowy)'] = df_chart_line['Czysty etanol [g]'].rolling(window=3, min_periods=1).mean()
 
-            base_bars = alt.Chart(df_chart_bars).mark_bar().encode(
-                x=alt.X('Data_str:N', sort=None, title='Data'),
+            # Zastosowanie yearmonthdate(Data):O wymusza natywne sortowanie chronologiczne Altair
+            base_bars = alt.Chart(df_chart_bars).mark_bar(size=15).encode(
+                x=alt.X('yearmonthdate(Data):O', title='Data', axis=alt.Axis(format='%d.%m', labelAngle=-90)),
                 y=alt.Y('Etanol (g):Q', title='Spożycie (g)'),
                 color=alt.Color('Alkohol:N', scale=kolory_alko, legend=alt.Legend(title="Trunek")),
-                tooltip=['Data_str', 'Alkohol', 'Etanol (g)']
+                tooltip=[alt.Tooltip('Data:T', format='%d.%m.%Y', title='Data'), 'Alkohol', 'Etanol (g)']
             )
             
-            # Wygładzenie na linii 3-dniowej w Trendach
             base_line = alt.Chart(df_chart_line).mark_line(color='#3498db', size=3, interpolate='monotone').encode(
-                x=alt.X('index_str:N', sort=None),
+                x=alt.X('yearmonthdate(Data):O', title='Data'),
                 y=alt.Y('Trend (3-dniowy):Q')
             )
             
@@ -347,7 +349,6 @@ try:
         df_miesiace = df.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
         df_miesiace = df_miesiace[df_miesiace['Miesiąc'] != 'Kwiecień']
         
-        # Wyciągamy średnią oraz przygotowujemy dane do wygładzonej linii na wykresie barowym
         df_miesiace_srednia = df_miesiace.groupby('Miesiąc')['Etanol (g)'].mean().round(1).reset_index()
         
         bar_miesiace = alt.Chart(df_miesiace_srednia).mark_bar(color='#f39c12').encode(
@@ -356,7 +357,6 @@ try:
             tooltip=['Miesiąc', 'Etanol (g)']
         )
 
-        # Wygładzona linia trendu dla miesięcy
         line_miesiace = alt.Chart(df_miesiace_srednia).mark_line(color='#e74c3c', size=3, interpolate='monotone').encode(
             x=alt.X('Miesiąc:N', sort=kolejnosc_miesiecy),
             y=alt.Y('Etanol (g):Q')
