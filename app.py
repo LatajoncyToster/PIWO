@@ -5,6 +5,27 @@ import altair as alt
 from oauth2client.service_account import ServiceAccountCredentials
 import datetime
 
+# --- KONFIGURACJA STRONY (Musi być jako pierwsza!) ---
+st.set_page_config(page_title="Alkoholizm jupi", page_icon="🍺", layout="wide")
+
+# --- WSTRZYKNIĘCIE CUSTOM CSS DLA LEPSZEGO UI ---
+st.markdown("""
+<style>
+    /* Stylowanie kontenerów metryk na profesjonalne karty */
+    div[data-testid="metric-container"] {
+        background-color: #1a1c23;
+        border: 1px solid #2d303e;
+        padding: 5% 5% 5% 10%;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    }
+    
+    /* Ukrycie domyślnego przycisku menu Streamlit dla czystego HUDa */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+</style>
+""", unsafe_allow_html=True)
+
 # Konfiguracja autoryzacji GCP
 def get_gspread_client():
     creds_dict = st.secrets["gcp_service_account"]
@@ -44,7 +65,7 @@ try:
         if st.button("⏪ Cofnij ostatni wpis"):
             try:
                 wszystkie_dane = sheet.get_all_values()
-                if len(wszystkie_dane) > 1: # Weryfikacja: ochrona nagłówków tabeli (wiersz 1)
+                if len(wszystkie_dane) > 1: 
                     sheet.delete_row(len(wszystkie_dane))
                     st.success("Ostatni wpis został permanentnie usunięty.")
                     st.rerun()
@@ -91,73 +112,87 @@ try:
     else:
         st.success(f"🛡️ Licznik trzeźwości: {streak} dni. Wątroba zgłasza proces regeneracji.")
 
-    # --- TABELA WPISÓW ---
-    st.subheader("Ostatnie wpisy")
-    df_display = df.copy()
-    
-    skroty_dni = {'Poniedziałek': 'Pon', 'Wtorek': 'Wto', 'Środa': 'Śro', 'Czwartek': 'Czw', 'Piątek': 'Pią', 'Sobota': 'Sob', 'Niedziela': 'Nie'}
-    df_display['Dzień'] = df_display['Dzień tygodnia'].map(skroty_dni)
-    df_display['Data'] = df_display['Data'].dt.strftime('%d.%m.%Y')
-    
-    kolumny_widoczne = ['Dzień', 'Data', 'Alkohol', 'Ilość [ml]', 'Moc [%]', 'Czysty etanol [g]']
-    df_display = df_display[kolumny_widoczne]
-    
-    st.dataframe(df_display.tail(10), hide_index=True)
+    # Rozdzielenie górnej sekcji na dwie kolumny (Tabela vs Kalendarz) dla lepszego wykorzystania Widescreen
+    col_top1, col_top2 = st.columns(2)
 
-    # --- INTERAKTYWNY KALENDARZ MIESIĘCZNY (HEATMAP) ---
-    st.subheader("📅 Kalendarz Spożycia")
-    
-    if 'kalendarz_offset' not in st.session_state:
-        st.session_state.kalendarz_offset = 0
+    with col_top1:
+        # --- TABELA WPISÓW ---
+        st.subheader("Ostatnie wpisy")
+        df_display = df.copy()
+        
+        skroty_dni = {'Poniedziałek': 'Pon', 'Wtorek': 'Wto', 'Środa': 'Śro', 'Czwartek': 'Czw', 'Piątek': 'Pią', 'Sobota': 'Sob', 'Niedziela': 'Nie'}
+        df_display['Dzień'] = df_display['Dzień tygodnia'].map(skroty_dni)
+        df_display['Data'] = df_display['Data'].dt.strftime('%d.%m.%Y')
+        
+        kolumny_widoczne = ['Dzień', 'Data', 'Alkohol', 'Ilość [ml]', 'Moc [%]', 'Czysty etanol [g]']
+        df_display = df_display[kolumny_widoczne]
+        
+        st.dataframe(df_display.tail(10), hide_index=True, use_container_width=True)
 
-    col_btn_l, col_miesiac, col_btn_r = st.columns([1, 2, 1])
-    
-    with col_btn_l:
-        if st.button("⬅️ Poprzedni"):
-            st.session_state.kalendarz_offset -= 1
-            
-    with col_btn_r:
-        if st.button("Następny ➡️"):
-            st.session_state.kalendarz_offset += 1
+    with col_top2:
+        # --- INTERAKTYWNY KALENDARZ MIESIĘCZNY (HEATMAP) ---
+        st.subheader("📅 Kalendarz Spożycia")
+        
+        if 'kalendarz_offset' not in st.session_state:
+            st.session_state.kalendarz_offset = 0
 
-    aktywna_data = dzisiaj + pd.DateOffset(months=st.session_state.kalendarz_offset)
-    
-    with col_miesiac:
-        st.markdown(f"<h4 style='text-align: center; margin-top: 0px;'>{aktywna_data.strftime('%m.%Y')}</h4>", unsafe_allow_html=True)
+        col_btn_l, col_miesiac, col_btn_r = st.columns([1, 2, 1])
+        
+        with col_btn_l:
+            if st.button("⬅️ Poprzedni"):
+                st.session_state.kalendarz_offset -= 1
+                
+        with col_btn_r:
+            if st.button("Następny ➡️"):
+                st.session_state.kalendarz_offset += 1
 
-    poczatek_miesiaca = aktywna_data.replace(day=1)
-    koniec_miesiaca = (poczatek_miesiaca + pd.DateOffset(months=1)) - pd.Timedelta(days=1)
-    
-    dni_miesiaca = pd.date_range(start=poczatek_miesiaca, end=koniec_miesiaca, freq='D')
-    df_kalendarz = pd.DataFrame({'Data': dni_miesiaca})
-    
-    df_etanol_dziennie = df.groupby('Data')['Czysty etanol [g]'].sum().reset_index()
-    df_kalendarz = df_kalendarz.merge(df_etanol_dziennie, on='Data', how='left').fillna(0)
-    
-    df_kalendarz = df_kalendarz.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
-    
-    nazwy_krotkie = {0: 'Pon', 1: 'Wto', 2: 'Śro', 3: 'Czw', 4: 'Pią', 5: 'Sob', 6: 'Nie'}
-    df_kalendarz['Nazwa_dnia'] = df_kalendarz['Data'].dt.dayofweek.map(nazwy_krotkie)
-    df_kalendarz['Dzień_miesiąca'] = df_kalendarz['Data'].dt.day.astype(str)
-    df_kalendarz['Rząd_tygodnia'] = df_kalendarz['Data'].apply(lambda d: (d.day - 1 + d.replace(day=1).weekday()) // 7)
-    
-    kolejnosc_kalendarza = ['Pon', 'Wto', 'Śro', 'Czw', 'Pią', 'Sob', 'Nie']
-    
-    heatmap = alt.Chart(df_kalendarz).mark_rect(stroke='gray', strokeWidth=0.5, cornerRadius=3).encode(
-        x=alt.X('Nazwa_dnia:N', sort=kolejnosc_kalendarza, title=None, axis=alt.Axis(labelAngle=0, labelPadding=10)),
-        y=alt.Y('Rząd_tygodnia:O', title=None, axis=alt.Axis(labels=False, ticks=False)), 
-        color=alt.Color('Etanol (g):Q', scale=alt.Scale(scheme='reds'), legend=alt.Legend(title="Etanol (g)")),
-        tooltip=['Data', 'Etanol (g)']
-    ).properties(height=250)
-    
-    text = alt.Chart(df_kalendarz).mark_text(baseline='middle').encode(
-        x=alt.X('Nazwa_dnia:N', sort=kolejnosc_kalendarza),
-        y=alt.Y('Rząd_tygodnia:O'),
-        text=alt.Text('Dzień_miesiąca:N'),
-        color=alt.condition(alt.datum['Etanol (g)'] > 60, alt.value('white'), alt.value('black'))
-    )
+        aktywna_data = dzisiaj + pd.DateOffset(months=st.session_state.kalendarz_offset)
+        
+        with col_miesiac:
+            st.markdown(f"<h4 style='text-align: center; margin-top: 0px;'>{aktywna_data.strftime('%m.%Y')}</h4>", unsafe_allow_html=True)
 
-    st.altair_chart(heatmap + text, use_container_width=True)
+        poczatek_miesiaca = aktywna_data.replace(day=1)
+        koniec_miesiaca = (poczatek_miesiaca + pd.DateOffset(months=1)) - pd.Timedelta(days=1)
+        
+        dni_miesiaca = pd.date_range(start=poczatek_miesiaca, end=koniec_miesiaca, freq='D')
+        df_kalendarz = pd.DataFrame({'Data': dni_miesiaca})
+        
+        df_etanol_dziennie = df.groupby('Data')['Czysty etanol [g]'].sum().reset_index()
+        df_kalendarz = df_kalendarz.merge(df_etanol_dziennie, on='Data', how='left').fillna(0)
+        
+        df_kalendarz = df_kalendarz.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
+        
+        nazwy_krotkie = {0: 'Pon', 1: 'Wto', 2: 'Śro', 3: 'Czw', 4: 'Pią', 5: 'Sob', 6: 'Nie'}
+        df_kalendarz['Nazwa_dnia'] = df_kalendarz['Data'].dt.dayofweek.map(nazwy_krotkie)
+        df_kalendarz['Dzień_miesiąca'] = df_kalendarz['Data'].dt.day.astype(str)
+        df_kalendarz['Rząd_tygodnia'] = df_kalendarz['Data'].apply(lambda d: (d.day - 1 + d.replace(day=1).weekday()) // 7)
+        
+        kolejnosc_kalendarza = ['Pon', 'Wto', 'Śro', 'Czw', 'Pią', 'Sob', 'Nie']
+        
+        # Warunek kolorowania: jeśli 0 to zieleń, w przeciwnym razie paleta czerwieni
+        kolorowanie = alt.condition(
+            alt.datum['Etanol (g)'] == 0,
+            alt.value('#27ae60'),  # Profesjonalna, stonowana zieleń
+            alt.Color('Etanol (g):Q', scale=alt.Scale(scheme='reds'), legend=alt.Legend(title="Etanol (g)"))
+        )
+
+        heatmap = alt.Chart(df_kalendarz).mark_rect(stroke='gray', strokeWidth=0.5, cornerRadius=3).encode(
+            x=alt.X('Nazwa_dnia:N', sort=kolejnosc_kalendarza, title=None, axis=alt.Axis(labelAngle=0, labelPadding=10)),
+            y=alt.Y('Rząd_tygodnia:O', title=None, axis=alt.Axis(labels=False, ticks=False)), 
+            color=kolorowanie,
+            tooltip=['Data', 'Etanol (g)']
+        ).properties(height=250)
+        
+        text = alt.Chart(df_kalendarz).mark_text(baseline='middle').encode(
+            x=alt.X('Nazwa_dnia:N', sort=kolejnosc_kalendarza),
+            y=alt.Y('Rząd_tygodnia:O'),
+            text=alt.Text('Dzień_miesiąca:N'),
+            color=alt.condition(alt.datum['Etanol (g)'] > 60, alt.value('white'), alt.value('black'))
+        )
+
+        st.altair_chart(heatmap + text, use_container_width=True)
+
+    st.divider()
 
     # --- PANEL OPERACYJNY 30-DNIOWY ---
     st.subheader("Panel (Ostatnie 30 dni)")
