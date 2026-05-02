@@ -2,16 +2,16 @@ import streamlit as st
 import pandas as pd
 import gspread
 import altair as alt
+import plotly.express as px  # NOWOŚĆ: Biblioteka do wykresu radarowego
 from oauth2client.service_account import ServiceAccountCredentials
 import datetime
 
-# --- KONFIGURACJA STRONY (Musi być jako pierwsza!) ---
+# --- KONFIGURACJA STRONY ---
 st.set_page_config(page_title="Alkoholizm jupi", page_icon="🍺", layout="wide")
 
-# --- WSTRZYKNIĘCIE CUSTOM CSS DLA LEPSZEGO UI ---
+# --- WSTRZYKNIĘCIE CUSTOM CSS ---
 st.markdown("""
 <style>
-    /* Stylowanie kontenerów metryk na profesjonalne karty */
     div[data-testid="metric-container"] {
         background-color: #1a1c23;
         border: 1px solid #2d303e;
@@ -19,8 +19,6 @@ st.markdown("""
         border-radius: 8px;
         box-shadow: 0 4px 6px rgba(0,0,0,0.3);
     }
-    
-    /* Ukrycie domyślnego przycisku menu Streamlit dla czystego HUDa */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
 </style>
@@ -42,14 +40,14 @@ try:
         st.header("📝 Dodaj dane")
         with st.form("add_drink_form", clear_on_submit=True):
             nowa_data = st.date_input("Data spożycia", value=datetime.date.today())
-            nowy_alko = st.selectbox("Rodzaj trunku", ["Piwo", "Wódka", "Wódka kolorowa", "Inne"])
+            nowy_alko = st.selectbox("Rodzaj trunku", ["Piwo", "Wódka", "Wódka kolorowa", "Wino", "Inne"])
             nowa_ilosc = st.number_input("Ilość [ml]", min_value=0, step=50, value=500)
             nowa_moc = st.number_input("Moc [%]", min_value=0.0, step=0.5, value=5.0)
             
             submit_button = st.form_submit_button("Dodaj trunek 🍻")
             
             if submit_button:
-                reverse_map = {'Wódka kolorowa': 'vk', 'Piwo': 'p', 'Wódka': 'v', 'Inne': 'i'}
+                reverse_map = {'Wódka kolorowa': 'vk', 'Piwo': 'p', 'Wódka': 'v', 'Wino': 'w', 'Inne': 'i'}
                 skrot_alko = reverse_map[nowy_alko]
                 data_str = nowa_data.strftime('%d.%m.%Y')
                 
@@ -61,18 +59,36 @@ try:
                     st.error(f"Błąd zapisu do chmury: {e}")
                     
         st.divider()
-        st.subheader("🗑️ Zarządzanie błędami")
-        if st.button("⏪ Cofnij ostatni wpis"):
-            try:
-                wszystkie_dane = sheet.get_all_values()
-                if len(wszystkie_dane) > 1: 
-                    sheet.delete_row(len(wszystkie_dane))
-                    st.success("Ostatni wpis został permanentnie usunięty.")
-                    st.rerun()
-                else:
-                    st.warning("Brak wpisów w bazie. Nie można usunąć nagłówków.")
-            except Exception as e:
-                st.error(f"Błąd połączenia z bazą: {e}")
+        st.subheader("⚙️ Szybkie akcje")
+        
+        # Przyciski zarządzania obok siebie
+        col_btn1, col_btn2 = st.columns(2)
+        with col_btn1:
+            if st.button("⏪ Cofnij"):
+                try:
+                    wszystkie_dane = sheet.get_all_values()
+                    if len(wszystkie_dane) > 1: 
+                        sheet.delete_row(len(wszystkie_dane))
+                        st.success("Cofnięto wpis.")
+                        st.rerun()
+                    else:
+                        st.warning("Brak wpisów.")
+                except Exception as e:
+                    st.error(f"Błąd: {e}")
+                    
+        with col_btn2:
+            if st.button("🔁 Powtórz"):
+                try:
+                    wszystkie_dane = sheet.get_all_values()
+                    if len(wszystkie_dane) > 1:
+                        ostatni_rekord = wszystkie_dane[-1]
+                        sheet.append_row(ostatni_rekord)
+                        st.success("Wjechała ta sama kolejka!")
+                        st.rerun()
+                    else:
+                        st.warning("Najpierw coś wypij.")
+                except Exception as e:
+                    st.error(f"Błąd: {e}")
 
     # --- POBIERANIE I CZYSZCZENIE DANYCH ---
     data = sheet.get_all_records()
@@ -82,12 +98,11 @@ try:
     df['Moc [%]'] = df['Moc [%]'].astype(str).str.replace(',', '.').astype(float)
     df['Czysty etanol [g]'] = (df['Ilość [ml]'] * (df['Moc [%]'] / 100) * 0.789).round(1)
     
-    mapowanie = {'vk': 'Wódka kolorowa', 'p': 'Piwo', 'v': 'Wódka', 'i': 'Inne'}
+    mapowanie = {'vk': 'Wódka kolorowa', 'p': 'Piwo', 'v': 'Wódka', 'w': 'Wino', 'i': 'Inne'}
     df['Alkohol'] = df['Alkohol'].replace(mapowanie)
     
     df['Data'] = pd.to_datetime(df['Data'], format='%d.%m.%Y')
     
-    # Inżynieria cech czasowych
     dni_map = {'Monday': 'Poniedziałek', 'Tuesday': 'Wtorek', 'Wednesday': 'Środa', 'Thursday': 'Czwartek', 'Friday': 'Piątek', 'Saturday': 'Sobota', 'Sunday': 'Niedziela'}
     miesiace_map = {'January': 'Styczeń', 'February': 'Luty', 'March': 'Marzec', 'April': 'Kwiecień', 'May': 'Maj', 'June': 'Czerwiec', 'July': 'Lipiec', 'August': 'Sierpień', 'September': 'Wrzesień', 'October': 'Październik', 'November': 'Listopad', 'December': 'Grudzień'}
     
@@ -112,85 +127,53 @@ try:
     else:
         st.success(f"🛡️ Licznik trzeźwości: {streak} dni. Wątroba zgłasza proces regeneracji.")
 
-    # Rozdzielenie górnej sekcji na dwie kolumny (Tabela vs Kalendarz) dla lepszego wykorzystania Widescreen
     col_top1, col_top2 = st.columns(2)
 
     with col_top1:
-        # --- TABELA WPISÓW ---
         st.subheader("Ostatnie wpisy")
         df_display = df.copy()
-        
         skroty_dni = {'Poniedziałek': 'Pon', 'Wtorek': 'Wto', 'Środa': 'Śro', 'Czwartek': 'Czw', 'Piątek': 'Pią', 'Sobota': 'Sob', 'Niedziela': 'Nie'}
         df_display['Dzień'] = df_display['Dzień tygodnia'].map(skroty_dni)
         df_display['Data'] = df_display['Data'].dt.strftime('%d.%m.%Y')
-        
         kolumny_widoczne = ['Dzień', 'Data', 'Alkohol', 'Ilość [ml]', 'Moc [%]', 'Czysty etanol [g]']
         df_display = df_display[kolumny_widoczne]
-        
         st.dataframe(df_display.tail(10), hide_index=True, use_container_width=True)
 
     with col_top2:
-        # --- INTERAKTYWNY KALENDARZ MIESIĘCZNY (HEATMAP) ---
-        st.subheader("📅 Kalendarz Spożycia")
+        # --- GLOBALNY KALENDARZ 365 DNI ---
+        st.subheader("📅 Roczna Mapa Zniszczenia (Ostatnie 52 tygodnie)")
         
-        if 'kalendarz_offset' not in st.session_state:
-            st.session_state.kalendarz_offset = 0
-
-        col_btn_l, col_miesiac, col_btn_r = st.columns([1, 2, 1])
+        rok_temu = dzisiaj - pd.Timedelta(days=365)
+        df_365 = df[df['Data'] >= rok_temu]
         
-        with col_btn_l:
-            if st.button("⬅️ Poprzedni"):
-                st.session_state.kalendarz_offset -= 1
-                
-        with col_btn_r:
-            if st.button("Następny ➡️"):
-                st.session_state.kalendarz_offset += 1
-
-        aktywna_data = dzisiaj + pd.DateOffset(months=st.session_state.kalendarz_offset)
+        all_days = pd.date_range(start=rok_temu, end=dzisiaj, freq='D')
+        df_heatmap = pd.DataFrame({'Data': all_days})
         
-        with col_miesiac:
-            st.markdown(f"<h4 style='text-align: center; margin-top: 0px;'>{aktywna_data.strftime('%m.%Y')}</h4>", unsafe_allow_html=True)
-
-        poczatek_miesiaca = aktywna_data.replace(day=1)
-        koniec_miesiaca = (poczatek_miesiaca + pd.DateOffset(months=1)) - pd.Timedelta(days=1)
+        df_etanol_dziennie = df_365.groupby('Data')['Czysty etanol [g]'].sum().reset_index()
+        df_heatmap = df_heatmap.merge(df_etanol_dziennie, on='Data', how='left').fillna(0)
+        df_heatmap = df_heatmap.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
         
-        dni_miesiaca = pd.date_range(start=poczatek_miesiaca, end=koniec_miesiaca, freq='D')
-        df_kalendarz = pd.DataFrame({'Data': dni_miesiaca})
-        
-        df_etanol_dziennie = df.groupby('Data')['Czysty etanol [g]'].sum().reset_index()
-        df_kalendarz = df_kalendarz.merge(df_etanol_dziennie, on='Data', how='left').fillna(0)
-        
-        df_kalendarz = df_kalendarz.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
-        
+        df_heatmap['Tydzień_Offset'] = ((df_heatmap['Data'] - rok_temu).dt.days // 7).astype(int)
+        df_heatmap['Dzień_tygodnia'] = df_heatmap['Data'].dt.dayofweek
         nazwy_krotkie = {0: 'Pon', 1: 'Wto', 2: 'Śro', 3: 'Czw', 4: 'Pią', 5: 'Sob', 6: 'Nie'}
-        df_kalendarz['Nazwa_dnia'] = df_kalendarz['Data'].dt.dayofweek.map(nazwy_krotkie)
-        df_kalendarz['Dzień_miesiąca'] = df_kalendarz['Data'].dt.day.astype(str)
-        df_kalendarz['Rząd_tygodnia'] = df_kalendarz['Data'].apply(lambda d: (d.day - 1 + d.replace(day=1).weekday()) // 7)
+        df_heatmap['Nazwa_dnia'] = df_heatmap['Dzień_tygodnia'].map(nazwy_krotkie)
         
         kolejnosc_kalendarza = ['Pon', 'Wto', 'Śro', 'Czw', 'Pią', 'Sob', 'Nie']
         
-        # Warunek kolorowania: jeśli 0 to zieleń, w przeciwnym razie paleta czerwieni
         kolorowanie = alt.condition(
             alt.datum['Etanol (g)'] == 0,
-            alt.value('#27ae60'),  # Profesjonalna, stonowana zieleń
+            alt.value('#27ae60'), # Zieleń dla trzeźwości
             alt.Color('Etanol (g):Q', scale=alt.Scale(scheme='reds'), legend=alt.Legend(title="Etanol (g)"))
         )
 
-        heatmap = alt.Chart(df_kalendarz).mark_rect(stroke='gray', strokeWidth=0.5, cornerRadius=3).encode(
-            x=alt.X('Nazwa_dnia:N', sort=kolejnosc_kalendarza, title=None, axis=alt.Axis(labelAngle=0, labelPadding=10)),
-            y=alt.Y('Rząd_tygodnia:O', title=None, axis=alt.Axis(labels=False, ticks=False)), 
+        heatmap = alt.Chart(df_heatmap).mark_rect(stroke='#2d303e', strokeWidth=1, cornerRadius=2).encode(
+            x=alt.X('Tydzień_Offset:O', title=None, axis=alt.Axis(labels=False, ticks=False)),
+            y=alt.Y('Nazwa_dnia:N', sort=kolejnosc_kalendarza, title=None, axis=alt.Axis(labelPadding=5)), 
             color=kolorowanie,
             tooltip=['Data', 'Etanol (g)']
-        ).properties(height=250)
-        
-        text = alt.Chart(df_kalendarz).mark_text(baseline='middle').encode(
-            x=alt.X('Nazwa_dnia:N', sort=kolejnosc_kalendarza),
-            y=alt.Y('Rząd_tygodnia:O'),
-            text=alt.Text('Dzień_miesiąca:N'),
-            color=alt.condition(alt.datum['Etanol (g)'] > 60, alt.value('white'), alt.value('black'))
-        )
+        ).properties(height=200)
 
-        st.altair_chart(heatmap + text, use_container_width=True)
+        st.altair_chart(heatmap, use_container_width=True)
 
     st.divider()
 
@@ -243,14 +226,15 @@ try:
             st.altair_chart(bars + line, use_container_width=True)
             
         with col2:
-            st.markdown("**Struktura spożycia**")
-            df_donut = df_miesiac.rename(columns={'Czysty etanol [g]': 'Etanol (g)'}).groupby('Alkohol')['Etanol (g)'].sum().reset_index()
-            donut = alt.Chart(df_donut).mark_arc(innerRadius=50).encode(
-                theta=alt.Theta(field="Etanol (g)", type="quantitative"),
-                color=alt.Color(field="Alkohol", type="nominal", legend=alt.Legend(title="Trunek")),
-                tooltip=['Alkohol', alt.Tooltip('Etanol (g)', format='.1f')]
-            ).properties(height=350)
-            st.altair_chart(donut, use_container_width=True)
+            st.markdown("**Radar Preferencji (Spider Chart)**")
+            
+            # Nowy, profesjonalny wykres radarowy z biblioteki Plotly
+            df_radar = df_miesiac.rename(columns={'Czysty etanol [g]': 'Etanol (g)'}).groupby('Alkohol')['Etanol (g)'].sum().reset_index()
+            fig = px.line_polar(df_radar, r='Etanol (g)', theta='Alkohol', line_close=True, template="plotly_dark", color_discrete_sequence=['#e74c3c'])
+            fig.update_traces(fill='toself', fillcolor='rgba(231, 76, 60, 0.5)')
+            fig.update_layout(margin=dict(t=30, b=30, l=30, r=30))
+            
+            st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("Brak danych z ostatnich 30 dni w rejestrze.")
 
@@ -259,18 +243,28 @@ try:
     # --- ANALITYKA HISTORYCZNA ---
     st.subheader("Analiza Historyczna")
     
-    tab1, tab2, tab3 = st.tabs(["📅 Rozkład Tygodniowy", "📈 Podsumowanie Miesięcy", "🏆 Hall of Shame (Top 3)"])
+    tab1, tab2, tab3 = st.tabs(["📅 Struktura Dni Tygodnia", "📈 Podsumowanie Miesięcy", "🏆 Hall of Shame (Top 3)"])
     
     with tab1:
-        st.markdown("**Ile ŚREDNIO wlewam w siebie w dany dzień tygodnia?**")
+        st.markdown("**Całkowita struktura urobku w dany dzień tygodnia z podziałem na trunki**")
         df_dni = df.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
-        df_dni = df_dni.groupby('Dzień tygodnia')['Etanol (g)'].mean().round(1).reset_index()
         
-        bar_dni = alt.Chart(df_dni).mark_bar(color='#9b59b6').encode(
+        # Agregacja do wykresu warstwowego (Stacked Bar)
+        df_dni_stacked = df_dni.groupby(['Dzień tygodnia', 'Alkohol'])['Etanol (g)'].sum().reset_index()
+        
+        # Nowa, customowa paleta kolorów wg wytycznych
+        kolory_alko = alt.Scale(
+            domain=['Piwo', 'Wódka kolorowa', 'Wódka', 'Wino', 'Inne'],
+            range=['#f1c40f', '#e84393', '#ffffff', '#e74c3c', '#95a5a6']
+        )
+        
+        bar_dni = alt.Chart(df_dni_stacked).mark_bar().encode(
             x=alt.X('Dzień tygodnia:N', sort=kolejnosc_dni, title='Dzień tygodnia'),
-            y=alt.Y('Etanol (g):Q', title='Średnio etanolu (g) / posiedzenie'),
-            tooltip=['Dzień tygodnia', 'Etanol (g)']
+            y=alt.Y('Etanol (g):Q', title='Całkowity urobek etanolu (g)'),
+            color=alt.Color('Alkohol:N', scale=kolory_alko, legend=alt.Legend(title="Trunek")),
+            tooltip=['Dzień tygodnia', 'Alkohol', 'Etanol (g)']
         ).properties(height=300)
+        
         st.altair_chart(bar_dni, use_container_width=True)
 
     with tab2:
