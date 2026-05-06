@@ -157,20 +157,22 @@ try:
         kolumny_widoczne = ['Dzień tygodnia', 'Data', 'Godz.', 'Alkohol', 'Ilość [ml]', 'Moc [%]', 'Czysty etanol [g]']
         df_display = df_display[kolumny_widoczne]
         
-        # ZMIANA: Wyciągnięcie 10 ostatnich wpisów i zaaplikowanie Pandas Stylera
         df_display_tail = df_display.tail(10).copy()
         
         def highlight_alternating_dates(data):
-            # Algorytm przypisujący parzystość unikalnym datom
             color_mask = data['Data'].factorize()[0] % 2 == 0
-            # Aplikacja stylów CSS wierszami (ciemnoszare tło dla True)
             return pd.DataFrame(
                 [['background-color: rgba(255, 255, 255, 0.08)' if m else '' for _ in data.columns] for m in color_mask],
                 index=data.index,
                 columns=data.columns
             )
             
-        styled_df = df_display_tail.style.apply(highlight_alternating_dates, axis=None)
+        # ZMIANA: Twarde formatowanie wyświetlanych wartości
+        styled_df = df_display_tail.style.apply(highlight_alternating_dates, axis=None).format({
+            'Ilość [ml]': '{:.0f}',
+            'Moc [%]': '{:.0f}',
+            'Czysty etanol [g]': '{:.1f}'
+        })
         st.dataframe(styled_df, hide_index=True, use_container_width=True)
 
     with col_top2:
