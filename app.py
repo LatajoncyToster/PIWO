@@ -141,12 +141,13 @@ try:
     streak = (dzisiaj - ostatni_wpis).days
     if streak < 0: streak = 0 
 
+    # ZMIANA: Zminimalizowane komunikaty licznika trzeźwości
     if streak == 0:
-        st.error(f"Licznik trzeźwości: {streak} dni. Pite dzisiaj.")
+        st.error(f"Licznik trzeźwości: {streak} dni")
     elif streak == 1:
-        st.warning(f"Licznik trzeźwości: {streak} dzień. Kac?")
+        st.warning(f"Licznik trzeźwości: {streak} dzień")
     else:
-        st.success(f"Licznik trzeźwości: {streak} dni. Wątroba zgłasza proces regeneracji.")
+        st.success(f"Licznik trzeźwości: {streak} dni")
 
     col_top1, col_top2 = st.columns(2)
 
@@ -386,7 +387,6 @@ try:
         st.altair_chart(wykres_miesieczny, use_container_width=True)
 
     with tab3:
-        # ZMIANA: Usunięcie tekstu "Dni największego woltażu:" i dodanie agregacji po Dniu tygodnia
         df_podium = df.groupby(['Data', 'Dzień tygodnia'])['Czysty etanol [g]'].sum().reset_index()
         df_podium = df_podium.sort_values(by='Czysty etanol [g]', ascending=False).head(3).reset_index(drop=True)
         
@@ -398,7 +398,6 @@ try:
                 gramy = row['Czysty etanol [g]']
                 eq_kufle_podium = int(round(gramy / 19.725, 0)) 
                 
-                # ZMIANA: Doklejenie dnia tygodnia obok daty
                 st.markdown(f"### {medale[i]} **{data_format} ({dzien})**")
                 st.markdown(f"**Etanol:** {gramy}g *(Równowartość ok. {eq_kufle_podium} piw jednego dnia!)*")
                 st.divider()
