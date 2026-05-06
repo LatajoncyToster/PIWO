@@ -167,7 +167,6 @@ try:
                 columns=data.columns
             )
             
-        # ZMIANA: Twarde formatowanie wyświetlanych wartości
         styled_df = df_display_tail.style.apply(highlight_alternating_dates, axis=None).format({
             'Ilość [ml]': '{:.0f}',
             'Moc [%]': '{:.0f}',
@@ -367,7 +366,8 @@ try:
     # --- ANALITYKA HISTORYCZNA ---
     st.subheader("Analiza Historyczna")
     
-    tab1, tab2, tab3 = st.tabs(["Rozkład Tygodniowy", "Podsumowanie Miesięcy", "Top 3"])
+    # ZMIANA: Dodano czwartą zakładkę dotyczącą wstrzemięźliwości
+    tab1, tab2, tab3, tab4 = st.tabs(["Rozkład Tygodniowy", "Podsumowanie Miesięcy", "Top 3: Spożycie", "Top 3: Przerwy"])
     
     with tab1:
         st.markdown("**Średnia**")
@@ -417,6 +417,60 @@ try:
                 st.markdown(f"### {medale[i]} **{data_format} ({dzien})**")
                 st.markdown(f"**Etanol:** {gramy}g *(Równowartość ok. {eq_kufle_podium} piw jednego dnia!)*")
                 st.divider()
+
+    # ZMIANA: Implementacja logiki wyliczania ciągów bez alkoholu
+    with tab4:
+        st.markdown("**Najdłuższe okresy bez alkoholu:**")
+        
+        unique_dates = df['Data'].dt.normalize().drop_duplicates().sort_values().reset_index(drop=True)
+        streaks = []
+        
+        for i in range(1, len(unique_dates)):
+            prev_date = unique_dates.iloc[i-1]
+            curr_date = unique_dates.iloc[i]
+            gap_days = (curr_date - prev_date).days - 1
+            if gap_days > 0:
+                start_gap = prev_date + pd.Timedelta(days=1)
+                end_gap = curr_date - pd.Timedelta(days=1)
+                streaks.append({
+                    'Dni': gap_days,
+                    'Start': start_gap,
+                    'Koniec': end_gap,
+                    'Status': ''
+                })
+        
+        if not unique_dates.empty:
+            ostatni_wpis = unique_dates.iloc[-1]
+            current_streak_days = (dzisiaj - ostatni_wpis).days
+            if current_streak_days > 0:
+                streaks.append({
+                    'Dni': current_streak_days,
+                    'Start': ostatni_wpis + pd.Timedelta(days=1),
+                    'Koniec': dzisiaj,
+                    'Status': '(Trwa)'
+                })
+                
+        df_streaks = pd.DataFrame(streaks)
+        if not df_streaks.empty:
+            df_streaks = df_streaks.sort_values(by=['Dni', 'Start'], ascending=[False, False]).head(3).reset_index(drop=True)
+            
+            medale = ["1.", "2.", "3."]
+            for i, row in df_streaks.iterrows():
+                start_str = row['Start'].strftime('%d.%m.%Y')
+                koniec_str = row['Koniec'].strftime('%d.%m.%Y')
+                dni = row['Dni']
+                status = row['Status']
+                
+                if start_str == koniec_str:
+                    zakres = start_str
+                else:
+                    zakres = f"{start_str} - {koniec_str}"
+                    
+                st.markdown(f"### {medale[i]} **{dni} dni** {status}")
+                st.markdown(f"**Okres:** {zakres}")
+                st.divider()
+        else:
+            st.info("Brak przerw. Pijesz codziennie.")
 
 except Exception as e:
     st.error(f"Błąd krytyczny układu logiki: {e}")
