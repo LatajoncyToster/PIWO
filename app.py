@@ -4,7 +4,7 @@ import gspread
 import altair as alt
 from oauth2client.service_account import ServiceAccountCredentials
 import datetime
-from zoneinfo import ZoneInfo # Natywna biblioteka Pythona - nie wymaga instalacji
+from zoneinfo import ZoneInfo
 
 # --- KONFIGURACJA STRONY ---
 st.set_page_config(page_title="Alkoholizm", layout="wide")
@@ -56,7 +56,6 @@ try:
                 skrot_alko = reverse_map[nowy_alko]
                 data_str = nowa_data.strftime('%d.%m.%Y')
                 
-                # Zastosowanie wbudowanej strefy czasowej
                 strefa_pl = ZoneInfo('Europe/Warsaw')
                 nowy_czas = datetime.datetime.now(strefa_pl).strftime('%H:%M') 
                 
@@ -106,7 +105,7 @@ try:
                 except Exception as e:
                     st.error(f"Błąd: {e}")
 
-    # --- POBIERANIE I CZYSZCZENIE DANYCH (Z CACHE) ---
+    # --- POBIERANIE I CZYSZCZENIE DANYCH ---
     data = fetch_data()
     df = pd.DataFrame(data)
 
@@ -154,10 +153,8 @@ try:
     with col_top1:
         st.subheader("Ostatnie wpisy")
         df_display = df.copy()
-        skroty_dni = {'Poniedziałek': 'Pon', 'Wtorek': 'Wto', 'Środa': 'Śro', 'Czwartek': 'Czw', 'Piątek': 'Pią', 'Sobota': 'Sob', 'Niedziela': 'Nie'}
-        df_display['Dzień'] = df_display['Dzień tygodnia'].map(skroty_dni)
         df_display['Data'] = df_display['Data'].dt.strftime('%d.%m.%Y')
-        kolumny_widoczne = ['Dzień', 'Data', 'Godz.', 'Alkohol', 'Ilość [ml]', 'Moc [%]', 'Czysty etanol [g]']
+        kolumny_widoczne = ['Dzień tygodnia', 'Data', 'Godz.', 'Alkohol', 'Ilość [ml]', 'Moc [%]', 'Czysty etanol [g]']
         df_display = df_display[kolumny_widoczne]
         st.dataframe(df_display.tail(10), hide_index=True, use_container_width=True)
 
@@ -194,7 +191,9 @@ try:
         df_kalendarz = df_kalendarz.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
         
         nazwy_krotkie = {0: 'Pon', 1: 'Wto', 2: 'Śro', 3: 'Czw', 4: 'Pią', 5: 'Sob', 6: 'Nie'}
+        pelne_nazwy = {0: 'Poniedziałek', 1: 'Wtorek', 2: 'Środa', 3: 'Czwartek', 4: 'Piątek', 5: 'Sobota', 6: 'Niedziela'}
         df_kalendarz['Nazwa_dnia'] = df_kalendarz['Data'].dt.dayofweek.map(nazwy_krotkie)
+        df_kalendarz['Pełny_dzień'] = df_kalendarz['Data'].dt.dayofweek.map(pelne_nazwy)
         df_kalendarz['Dzień_miesiąca'] = df_kalendarz['Data'].dt.day.astype(str)
         df_kalendarz['Rząd_tygodnia'] = df_kalendarz['Data'].apply(lambda d: (d.day - 1 + d.replace(day=1).weekday()) // 7)
         
@@ -210,7 +209,7 @@ try:
             x=alt.X('Nazwa_dnia:N', sort=kolejnosc_kalendarza, title=None, axis=alt.Axis(labelAngle=0, labelPadding=10)),
             y=alt.Y('Rząd_tygodnia:O', title=None, axis=alt.Axis(labels=False, ticks=False)), 
             color=kolorowanie,
-            tooltip=['Data', 'Etanol (g)']
+            tooltip=[alt.Tooltip('Data:T', format='%d.%m.%Y', title='Data'), alt.Tooltip('Pełny_dzień:N', title='Dzień'), 'Etanol (g)']
         ).properties(height=250)
         
         text = alt.Chart(df_kalendarz).mark_text(baseline='middle').encode(
@@ -307,7 +306,7 @@ try:
         with col1:
             st.markdown("**Trend**")
             
-            df_chart_bars = df_miesiac.groupby(['Data', 'Alkohol'])['Czysty etanol [g]'].sum().reset_index()
+            df_chart_bars = df_miesiac.groupby(['Data', 'Dzień tygodnia', 'Alkohol'])['Czysty etanol [g]'].sum().reset_index()
             df_chart_bars = df_chart_bars.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
             
             df_chart_line = df_miesiac.groupby('Data')['Czysty etanol [g]'].sum().reset_index()
@@ -322,7 +321,7 @@ try:
                 x=alt.X('yearmonthdate(Data):O', title='Data', axis=alt.Axis(format='%d.%m', labelAngle=-90)),
                 y=alt.Y('Etanol (g):Q', title='Spożycie (g)'),
                 color=alt.Color('Alkohol:N', scale=kolory_alko, legend=alt.Legend(title="Trunek", orient="bottom")),
-                tooltip=[alt.Tooltip('Data:T', format='%d.%m.%Y', title='Data'), 'Alkohol', 'Etanol (g)']
+                tooltip=[alt.Tooltip('Data:T', format='%d.%m.%Y', title='Data'), 'Dzień tygodnia', 'Alkohol', 'Etanol (g)']
             )
             
             base_line = alt.Chart(df_chart_line).mark_line(color='#3498db', size=3, interpolate='monotone').encode(
@@ -387,18 +386,20 @@ try:
         st.altair_chart(wykres_miesieczny, use_container_width=True)
 
     with tab3:
-        st.markdown("**Dni największego woltażu:**")
-        df_podium = df.groupby('Data')['Czysty etanol [g]'].sum().reset_index()
+        # ZMIANA: Usunięcie tekstu "Dni największego woltażu:" i dodanie agregacji po Dniu tygodnia
+        df_podium = df.groupby(['Data', 'Dzień tygodnia'])['Czysty etanol [g]'].sum().reset_index()
         df_podium = df_podium.sort_values(by='Czysty etanol [g]', ascending=False).head(3).reset_index(drop=True)
         
         if not df_podium.empty:
             medale = ["1.", "2.", "3."]
             for i, row in df_podium.iterrows():
                 data_format = row['Data'].strftime('%d.%m.%Y')
+                dzien = row['Dzień tygodnia']
                 gramy = row['Czysty etanol [g]']
                 eq_kufle_podium = int(round(gramy / 19.725, 0)) 
                 
-                st.markdown(f"### {medale[i]} **{data_format}**")
+                # ZMIANA: Doklejenie dnia tygodnia obok daty
+                st.markdown(f"### {medale[i]} **{data_format} ({dzien})**")
                 st.markdown(f"**Etanol:** {gramy}g *(Równowartość ok. {eq_kufle_podium} piw jednego dnia!)*")
                 st.divider()
 
