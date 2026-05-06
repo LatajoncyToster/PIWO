@@ -23,7 +23,8 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Konfiguracja autoryzacji GCP
+# --- OPTYMALIZACJA: POŁĄCZENIE I CACHOWANIE DANYCH ---
+@st.cache_resource
 def get_gspread_client():
     creds_dict = st.secrets["gcp_service_account"]
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
@@ -33,6 +34,11 @@ def get_gspread_client():
 try:
     client = get_gspread_client()
     sheet = client.open('PIWO').sheet1 
+    
+    # Funkcja buforująca dane w pamięci (odciąża API Google)
+    @st.cache_data(ttl=600)
+    def fetch_data():
+        return sheet.get_all_records()
     
     # --- MODUŁ WPROWADZANIA DANYCH (SIDEBAR) ---
     with st.sidebar:
@@ -49,10 +55,12 @@ try:
                 reverse_map = {'Wódka kolorowa': 'vk', 'Piwo': 'p', 'Wódka': 'v', 'Wino': 'w', 'Inne': 'i'}
                 skrot_alko = reverse_map[nowy_alko]
                 data_str = nowa_data.strftime('%d.%m.%Y')
+                nowy_czas = datetime.datetime.now().strftime('%H:%M') # Implementacja sygnatury czasowej
                 
                 try:
-                    sheet.append_row([data_str, skrot_alko, nowa_ilosc, nowa_moc])
+                    sheet.append_row([data_str, skrot_alko, nowa_ilosc, nowa_moc, nowy_czas])
                     st.success("Wpis dodany pomyślnie!")
+                    fetch_data.clear() # Czyszczenie cache po dodaniu danych
                     st.rerun() 
                 except Exception as e:
                     st.error(f"Błąd zapisu do chmury: {e}")
@@ -66,9 +74,9 @@ try:
                 try:
                     wszystkie_dane = sheet.get_all_values()
                     if len(wszystkie_dane) > 1: 
-                        # ZMIANA: Zastosowano prawidłową, nowoczesną metodę dla biblioteki gspread
                         sheet.delete_rows(len(wszystkie_dane))
                         st.success("Cofnięto wpis.")
+                        fetch_data.clear() # Czyszczenie cache
                         st.rerun()
                     else:
                         st.warning("Brak wpisów.")
@@ -81,21 +89,31 @@ try:
                     wszystkie_dane = sheet.get_all_values()
                     if len(wszystkie_dane) > 1:
                         ostatni_rekord = wszystkie_dane[-1]
+                        # Aktualizacja czasu dla sklonowanego wpisu
+                        ostatni_rekord[4] = datetime.datetime.now().strftime('%H:%M') if len(ostatni_rekord) > 4 else datetime.datetime.now().strftime('%H:%M')
                         sheet.append_row(ostatni_rekord)
                         st.success("Wjechała ta sama kolejka!")
+                        fetch_data.clear() # Czyszczenie cache
                         st.rerun()
                     else:
                         st.warning("Najpierw coś wypij.")
                 except Exception as e:
                     st.error(f"Błąd: {e}")
 
-    # --- POBIERANIE I CZYSZCZENIE DANYCH ---
-    data = sheet.get_all_records()
+    # --- POBIERANIE I CZYSZCZENIE DANYCH (Z CACHE) ---
+    data = fetch_data()
     df = pd.DataFrame(data)
 
     df['Ilość [ml]'] = df['Ilość [ml]'].astype(str).str.replace(',', '.').astype(float)
     df['Moc [%]'] = df['Moc [%]'].astype(str).str.replace(',', '.').astype(float)
     df['Czysty etanol [g]'] = (df['Ilość [ml]'] * (df['Moc [%]'] / 100) * 0.789).round(1)
+    
+    # Obsługa logiki dla starszych wpisów bez godziny
+    if 'Godz.' not in df.columns:
+        df['Godz.'] = '--:--'
+    else:
+        df['Godz.'] = df['Godz.'].fillna('--:--').astype(str)
+        df.loc[df['Godz.'] == '', 'Godz.'] = '--:--'
     
     mapowanie = {'vk': 'Wódka kolorowa', 'p': 'Piwo', 'v': 'Wódka', 'w': 'Wino', 'i': 'Inne'}
     df['Alkohol'] = df['Alkohol'].replace(mapowanie)
@@ -134,7 +152,8 @@ try:
         skroty_dni = {'Poniedziałek': 'Pon', 'Wtorek': 'Wto', 'Środa': 'Śro', 'Czwartek': 'Czw', 'Piątek': 'Pią', 'Sobota': 'Sob', 'Niedziela': 'Nie'}
         df_display['Dzień'] = df_display['Dzień tygodnia'].map(skroty_dni)
         df_display['Data'] = df_display['Data'].dt.strftime('%d.%m.%Y')
-        kolumny_widoczne = ['Dzień', 'Data', 'Alkohol', 'Ilość [ml]', 'Moc [%]', 'Czysty etanol [g]']
+        # Dodanie ekspozycji kolumny godzinowej w głównym HUDzie
+        kolumny_widoczne = ['Dzień', 'Data', 'Godz.', 'Alkohol', 'Ilość [ml]', 'Moc [%]', 'Czysty etanol [g]']
         df_display = df_display[kolumny_widoczne]
         st.dataframe(df_display.tail(10), hide_index=True, use_container_width=True)
 
@@ -293,7 +312,9 @@ try:
             
             df_chart_line = df_chart_line.set_index('Data').reindex(full_date_range, fill_value=0).reset_index()
             df_chart_line = df_chart_line.rename(columns={'index': 'Data'})
-            df_chart_line['Trend (3-dniowy)'] = df_chart_line['Czysty etanol [g]'].rolling(window=3, min_periods=1).mean()
+            
+            # ZMIANA: Modyfikacja algorytmu wygładzania wariancji na pełen 7-dniowy cykl operacyjny
+            df_chart_line['Trend (7-dniowy)'] = df_chart_line['Czysty etanol [g]'].rolling(window=7, min_periods=1).mean()
 
             base_bars = alt.Chart(df_chart_bars).mark_bar(size=15).encode(
                 x=alt.X('yearmonthdate(Data):O', title='Data', axis=alt.Axis(format='%d.%m', labelAngle=-90)),
@@ -304,7 +325,7 @@ try:
             
             base_line = alt.Chart(df_chart_line).mark_line(color='#3498db', size=3, interpolate='monotone').encode(
                 x=alt.X('yearmonthdate(Data):O', title='Data'),
-                y=alt.Y('Trend (3-dniowy):Q')
+                y=alt.Y('Trend (7-dniowy):Q')
             )
             
             st.altair_chart(base_bars + base_line, use_container_width=True)
