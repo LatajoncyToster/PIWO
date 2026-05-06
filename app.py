@@ -6,7 +6,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 import datetime
 
 # --- KONFIGURACJA STRONY ---
-st.set_page_config(page_title="Alkoholizm", page_icon="🍺", layout="wide")
+st.set_page_config(page_title="Alkoholizm", layout="wide")
 
 # --- WSTRZYKNIĘCIE CUSTOM CSS ---
 st.markdown("""
@@ -35,48 +35,47 @@ try:
     client = get_gspread_client()
     sheet = client.open('PIWO').sheet1 
     
-    # Funkcja buforująca dane w pamięci (odciąża API Google)
     @st.cache_data(ttl=600)
     def fetch_data():
         return sheet.get_all_records()
     
     # --- MODUŁ WPROWADZANIA DANYCH (SIDEBAR) ---
     with st.sidebar:
-        st.header("📝 Dodaj dane")
+        st.header("Dodaj dane")
         with st.form("add_drink_form", clear_on_submit=True):
             nowa_data = st.date_input("Data spożycia", value=datetime.date.today())
             nowy_alko = st.selectbox("Rodzaj trunku", ["Piwo", "Wódka", "Wódka kolorowa", "Wino", "Inne"])
             nowa_ilosc = st.number_input("Ilość [ml]", min_value=0, step=50, value=500)
             nowa_moc = st.number_input("Moc [%]", min_value=0.0, step=0.5, value=5.0)
             
-            submit_button = st.form_submit_button("Dodaj trunek 🍻")
+            submit_button = st.form_submit_button("Dodaj trunek")
             
             if submit_button:
                 reverse_map = {'Wódka kolorowa': 'vk', 'Piwo': 'p', 'Wódka': 'v', 'Wino': 'w', 'Inne': 'i'}
                 skrot_alko = reverse_map[nowy_alko]
                 data_str = nowa_data.strftime('%d.%m.%Y')
-                nowy_czas = datetime.datetime.now().strftime('%H:%M') # Implementacja sygnatury czasowej
+                nowy_czas = datetime.datetime.now().strftime('%H:%M') 
                 
                 try:
                     sheet.append_row([data_str, skrot_alko, nowa_ilosc, nowa_moc, nowy_czas])
-                    st.success("Wpis dodany pomyślnie!")
-                    fetch_data.clear() # Czyszczenie cache po dodaniu danych
+                    st.success("Wpis dodany pomyślnie.")
+                    fetch_data.clear() 
                     st.rerun() 
                 except Exception as e:
                     st.error(f"Błąd zapisu do chmury: {e}")
                     
         st.divider()
-        st.subheader("⚙️ Szybkie akcje")
+        st.subheader("Szybkie akcje")
         
         col_btn1, col_btn2 = st.columns(2)
         with col_btn1:
-            if st.button("⏪ Cofnij"):
+            if st.button("Cofnij"):
                 try:
                     wszystkie_dane = sheet.get_all_values()
                     if len(wszystkie_dane) > 1: 
                         sheet.delete_rows(len(wszystkie_dane))
                         st.success("Cofnięto wpis.")
-                        fetch_data.clear() # Czyszczenie cache
+                        fetch_data.clear() 
                         st.rerun()
                     else:
                         st.warning("Brak wpisów.")
@@ -84,19 +83,18 @@ try:
                     st.error(f"Błąd: {e}")
                     
         with col_btn2:
-            if st.button("🔁 Powtórz"):
+            if st.button("Powtórz"):
                 try:
                     wszystkie_dane = sheet.get_all_values()
                     if len(wszystkie_dane) > 1:
                         ostatni_rekord = wszystkie_dane[-1]
-                        # Aktualizacja czasu dla sklonowanego wpisu
                         ostatni_rekord[4] = datetime.datetime.now().strftime('%H:%M') if len(ostatni_rekord) > 4 else datetime.datetime.now().strftime('%H:%M')
                         sheet.append_row(ostatni_rekord)
-                        st.success("Wjechała ta sama kolejka!")
-                        fetch_data.clear() # Czyszczenie cache
+                        st.success("Wprowadzono powielony rekord.")
+                        fetch_data.clear() 
                         st.rerun()
                     else:
-                        st.warning("Najpierw coś wypij.")
+                        st.warning("Baza danych jest pusta.")
                 except Exception as e:
                     st.error(f"Błąd: {e}")
 
@@ -108,7 +106,6 @@ try:
     df['Moc [%]'] = df['Moc [%]'].astype(str).str.replace(',', '.').astype(float)
     df['Czysty etanol [g]'] = (df['Ilość [ml]'] * (df['Moc [%]'] / 100) * 0.789).round(1)
     
-    # Obsługa logiki dla starszych wpisów bez godziny
     if 'Godz.' not in df.columns:
         df['Godz.'] = '--:--'
     else:
@@ -130,7 +127,7 @@ try:
     kolejnosc_miesiecy = ['Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec', 'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień']
 
     # --- INTERFEJS GŁÓWNY ---
-    st.title("🍺 Alkoholizm")
+    st.title("Alkoholizm")
     
     ostatni_wpis = df['Data'].max()
     dzisiaj = pd.Timestamp.now().normalize()
@@ -138,11 +135,11 @@ try:
     if streak < 0: streak = 0 
 
     if streak == 0:
-        st.error(f"🚨 Licznik trzeźwości: {streak} dni. Pite dzisiaj.")
+        st.error(f"Licznik trzeźwości: {streak} dni. Pite dzisiaj.")
     elif streak == 1:
-        st.warning(f"⚠️ Licznik trzeźwości: {streak} dzień. Kac?")
+        st.warning(f"Licznik trzeźwości: {streak} dzień. Kac?")
     else:
-        st.success(f"🛡️ Licznik trzeźwości: {streak} dni. Wątroba zgłasza proces regeneracji.")
+        st.success(f"Licznik trzeźwości: {streak} dni. Wątroba zgłasza proces regeneracji.")
 
     col_top1, col_top2 = st.columns(2)
 
@@ -152,13 +149,12 @@ try:
         skroty_dni = {'Poniedziałek': 'Pon', 'Wtorek': 'Wto', 'Środa': 'Śro', 'Czwartek': 'Czw', 'Piątek': 'Pią', 'Sobota': 'Sob', 'Niedziela': 'Nie'}
         df_display['Dzień'] = df_display['Dzień tygodnia'].map(skroty_dni)
         df_display['Data'] = df_display['Data'].dt.strftime('%d.%m.%Y')
-        # Dodanie ekspozycji kolumny godzinowej w głównym HUDzie
         kolumny_widoczne = ['Dzień', 'Data', 'Godz.', 'Alkohol', 'Ilość [ml]', 'Moc [%]', 'Czysty etanol [g]']
         df_display = df_display[kolumny_widoczne]
         st.dataframe(df_display.tail(10), hide_index=True, use_container_width=True)
 
     with col_top2:
-        st.subheader("📅 Kalendarz Spożycia (Miesięczny)")
+        st.subheader("Kalendarz Spożycia (Miesięczny)")
         
         if 'kalendarz_offset' not in st.session_state:
             st.session_state.kalendarz_offset = 0
@@ -166,11 +162,11 @@ try:
         col_btn_l, col_miesiac, col_btn_r = st.columns([1, 2, 1])
         
         with col_btn_l:
-            if st.button("⬅️ Poprzedni"):
+            if st.button("Poprzedni"):
                 st.session_state.kalendarz_offset -= 1
                 
         with col_btn_r:
-            if st.button("Następny ➡️"):
+            if st.button("Następny"):
                 st.session_state.kalendarz_offset += 1
 
         aktywna_data = dzisiaj + pd.DateOffset(months=st.session_state.kalendarz_offset)
@@ -219,7 +215,7 @@ try:
         st.altair_chart(heatmap + text, use_container_width=True)
 
     # --- PANCERNA ROCZNA MAPA ZNISZCZENIA (PON - NIE) ---
-    st.subheader("🗓️ Tygodnie")
+    st.subheader("Tygodnie")
     
     najblizsza_niedziela = dzisiaj + pd.Timedelta(days=(6 - dzisiaj.dayofweek))
     rok_temu_tydzien = najblizsza_niedziela - pd.Timedelta(days=364)
@@ -252,7 +248,7 @@ try:
     )
 
     heatmap_tygodniowa = alt.Chart(df_heatmap_tyg).mark_rect(stroke='#2d303e', strokeWidth=1, cornerRadius=2).encode(
-        x=alt.X('Tydzień_Num:O', title='Starsze tygodnie ➔ Aktualny tydzień (Teraz)', axis=alt.Axis(labels=False, ticks=False)),
+        x=alt.X('Tydzień_Num:O', title='Starsze tygodnie -> Aktualny tydzień (Teraz)', axis=alt.Axis(labels=False, ticks=False)),
         y=alt.Y('Wiersz:N', title=None, axis=alt.Axis(labels=False, ticks=False)), 
         color=kolorowanie_tygodni,
         tooltip=[alt.Tooltip('Zakres_Dat:N', title='Okres'), 'Etanol (g)']
@@ -288,9 +284,9 @@ try:
         
         st.markdown("**Alkohol wypity w ostatnich 30 dniach w przeliczeniu na:**")
         kpi1, kpi2, kpi3 = st.columns(3)
-        kpi1.metric(label="🍺 Kufle piwa (5%)", value=eq_kufle, delta=delta_kufle, delta_color="inverse")
-        kpi2.metric(label="🥃 Shoty wódki (40ml)", value=eq_shoty, delta=delta_shoty, delta_color="inverse")
-        kpi3.metric(label="🍾 Flaszki 0.7 (40%)", value=eq_flaszki, delta=delta_flaszki, delta_color="inverse")
+        kpi1.metric(label="Kufle piwa (5%)", value=eq_kufle, delta=delta_kufle, delta_color="inverse")
+        kpi2.metric(label="Shoty wódki (40ml)", value=eq_shoty, delta=delta_shoty, delta_color="inverse")
+        kpi3.metric(label="Flaszki 0.7 (40%)", value=eq_flaszki, delta=delta_flaszki, delta_color="inverse")
         
         st.divider() 
         col1, col2 = st.columns([2, 1])
@@ -312,8 +308,6 @@ try:
             
             df_chart_line = df_chart_line.set_index('Data').reindex(full_date_range, fill_value=0).reset_index()
             df_chart_line = df_chart_line.rename(columns={'index': 'Data'})
-            
-            # ZMIANA: Modyfikacja algorytmu wygładzania wariancji na pełen 7-dniowy cykl operacyjny
             df_chart_line['Trend (7-dniowy)'] = df_chart_line['Czysty etanol [g]'].rolling(window=7, min_periods=1).mean()
 
             base_bars = alt.Chart(df_chart_bars).mark_bar(size=15).encode(
@@ -349,7 +343,7 @@ try:
     # --- ANALITYKA HISTORYCZNA ---
     st.subheader("Analiza Historyczna")
     
-    tab1, tab2, tab3 = st.tabs(["📅 Rozkład Tygodniowy", "📈 Podsumowanie Miesięcy", "🏆 Top 3"])
+    tab1, tab2, tab3 = st.tabs(["Rozkład Tygodniowy", "Podsumowanie Miesięcy", "Top 3"])
     
     with tab1:
         st.markdown("**Średnia**")
@@ -390,7 +384,7 @@ try:
         df_podium = df_podium.sort_values(by='Czysty etanol [g]', ascending=False).head(3).reset_index(drop=True)
         
         if not df_podium.empty:
-            medale = ["🥇", "🥈", "🥉"]
+            medale = ["1.", "2.", "3."]
             for i, row in df_podium.iterrows():
                 data_format = row['Data'].strftime('%d.%m.%Y')
                 gramy = row['Czysty etanol [g]']
