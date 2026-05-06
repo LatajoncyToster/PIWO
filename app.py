@@ -4,7 +4,7 @@ import gspread
 import altair as alt
 from oauth2client.service_account import ServiceAccountCredentials
 import datetime
-import pytz  # Obsługa stref czasowych
+from zoneinfo import ZoneInfo # Natywna biblioteka Pythona - nie wymaga instalacji
 
 # --- KONFIGURACJA STRONY ---
 st.set_page_config(page_title="Alkoholizm", layout="wide")
@@ -56,8 +56,8 @@ try:
                 skrot_alko = reverse_map[nowy_alko]
                 data_str = nowa_data.strftime('%d.%m.%Y')
                 
-                # ZMIANA: Twarde ustawienie polskiej strefy czasowej
-                strefa_pl = pytz.timezone('Europe/Warsaw')
+                # Zastosowanie wbudowanej strefy czasowej
+                strefa_pl = ZoneInfo('Europe/Warsaw')
                 nowy_czas = datetime.datetime.now(strefa_pl).strftime('%H:%M') 
                 
                 try:
@@ -92,10 +92,9 @@ try:
                     wszystkie_dane = sheet.get_all_values()
                     if len(wszystkie_dane) > 1:
                         ostatni_rekord = wszystkie_dane[-1]
-                        strefa_pl = pytz.timezone('Europe/Warsaw')
+                        strefa_pl = ZoneInfo('Europe/Warsaw')
                         aktualny_czas = datetime.datetime.now(strefa_pl).strftime('%H:%M')
                         
-                        # Aktualizacja czasu powielonego rekordu do obecnego czasu polskiego
                         ostatni_rekord[4] = aktualny_czas if len(ostatni_rekord) > 4 else aktualny_czas
                         
                         sheet.append_row(ostatni_rekord)
@@ -139,7 +138,7 @@ try:
     st.title("Alkoholizm")
     
     ostatni_wpis = df['Data'].max()
-    dzisiaj = pd.Timestamp.now(tz=pytz.timezone('Europe/Warsaw')).normalize().tz_localize(None)
+    dzisiaj = pd.Timestamp.now(tz=ZoneInfo('Europe/Warsaw')).normalize().tz_localize(None)
     streak = (dzisiaj - ostatni_wpis).days
     if streak < 0: streak = 0 
 
