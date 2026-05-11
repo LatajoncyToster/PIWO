@@ -141,13 +141,13 @@ try:
             df_disp = df.copy()
             df_disp['Data_str'] = df_disp['Data'].dt.strftime('%d.%m.%Y')
             df_final = df_disp[['Dzień tygodnia', 'Data_str', 'Godz.', 'Alkohol', 'Ilość [ml]', 'Moc [%]', 'Czysty etanol [g]']].iloc[::-1].copy()
-            df_final.columns = ['Dzień tygodnia', 'Data', 'Godz.', 'Alkohol', 'Ilość [ml]', 'Moc [%]', 'Etanol [g]']
+            df_final.columns = ['Dzień tygodnia', 'Data', 'Godz.', 'Alkohol', 'Ilość [ml]', 'Moc [%]', 'Czysty etanol [g]']
             
             def highlight_dates(data):
                 mask = data['Data'].factorize()[0] % 2 == 0
                 return pd.DataFrame([['background-color: rgba(255, 255, 255, 0.08)' if m else '' for _ in data.columns] for m in mask], index=data.index, columns=data.columns)
                 
-            st.dataframe(df_final.style.apply(highlight_dates, axis=None).format({'Ilość [ml]': '{:.0f}', 'Moc [%]': '{:.1f}', 'Etanol [g]': '{:.1f}'}), hide_index=True, use_container_width=True, height=350)
+            st.dataframe(df_final.style.apply(highlight_dates, axis=None).format({'Ilość [ml]': '{:.0f}', 'Moc [%]': '{:.1f}', 'Czysty etanol [g]': '{:.1f}'}), hide_index=True, use_container_width=True, height=350)
 
         with col_top2:
             st.subheader("Kalendarz (Miesięczny)")
@@ -180,44 +180,104 @@ try:
         df_t = pd.DataFrame({'Off': range(51, -1, -1)})
         df_t['Kon'] = niedziela - pd.to_timedelta(df_t['Off'] * 7, unit='D')
         df_t['Poc'] = df_t['Kon'] - pd.Timedelta(days=6)
+        df_t['Zakres'] = df_t['Poc'].dt.strftime('%d.%m') + " - " + df_t['Kon'].dt.strftime('%d.%m')
+        
         if not df_52.empty:
             df_52['Off'] = ((niedziela - df_52['Data']).dt.days // 7)
-            df_t = pd.merge(df_t, df_52.groupby('Off')['Czysty etanol [g]'].sum().reset_index(), on='Off', how='left').fillna(0)
-        else: df_t['Czysty etanol [g]'] = 0
-        st.altair_chart(alt.Chart(df_t).mark_rect(stroke='#2d303e', strokeWidth=1, cornerRadius=2).encode(
-            x=alt.X('Off:O', sort='descending', axis=alt.Axis(labels=False, ticks=False), title='Starsze -> Nowsze'),
-            y=alt.Y('Off:O', axis=alt.Axis(labels=False, ticks=False), title=None),
+            w_sum = df_52.groupby('Off')['Czysty etanol [g]'].sum().reset_index()
+            df_t = pd.merge(df_t, w_sum, on='Off', how='left')
+            # FIX: Zabezpieczenie przed wartościami NaN (wynikającymi z merge)
+            df_t['Czysty etanol [g]'] = df_t['Czysty etanol [g]'].fillna(0)
+        else:
+            df_t['Czysty etanol [g]'] = 0
+
+        df_t['Tydzien'] = range(1, 53)
+        df_t['Wiersz'] = 'Postęp'
+        
+        heatmap_tyg = alt.Chart(df_t).mark_rect(stroke='#2d303e', strokeWidth=1, cornerRadius=2).encode(
+            x=alt.X('Tydzien:O', title='Starsze tygodnie -> Aktualny tydzień', axis=alt.Axis(labels=False, ticks=False)),
+            y=alt.Y('Wiersz:N', title=None, axis=alt.Axis(labels=False, ticks=False)), 
             color=alt.condition(alt.datum['Czysty etanol [g]'] == 0, alt.value('#27ae60'), alt.Color('Czysty etanol [g]:Q', scale=alt.Scale(scheme='reds'))),
-            tooltip=['Czysty etanol [g]']
-        ).properties(height=80), use_container_width=True)
+            tooltip=[alt.Tooltip('Zakres:N', title='Okres'), 'Czysty etanol [g]']
+        ).properties(height=80)
+        st.altair_chart(heatmap_tyg, use_container_width=True)
 
         st.divider()
         st.subheader("Panel (30 dni)")
-        df_m = df[df['Data'] >= dzisiaj - pd.Timedelta(days=30)]
+        miesiac_temu = dzisiaj - pd.Timedelta(days=30)
+        dwa_temu = dzisiaj - pd.Timedelta(days=60)
+        
+        df_m = df[df['Data'] >= miesiac_temu]
+        df_pop = df[(df['Data'] >= dwa_temu) & (df['Data'] < miesiac_temu)]
+
         if not df_m.empty:
             et = df_m['Czysty etanol [g]'].sum()
-            # Przelicznik na litry wódki 40% (1L = 315.6g etanolu)
-            kp1, kp2, kp3 = st.columns(3)
-            kp1.metric("Puszki piwa (5%)", int(round(et / 19.725, 0)))
-            kp2.metric("Shoty wódki (40ml)", int(round(et / 12.624, 0)))
-            kp3.metric("Litry wódki (40%)", round(et / 315.6, 2))
+            et_pop = df_pop['Czysty etanol [g]'].sum() if not df_pop.empty else 0
             
+            kufle = int(round(et / 19.725, 0))
+            shoty = int(round(et / 12.624, 0))
+            litry = round(et / 315.6, 2)
+            
+            kufle_pop = int(round(et_pop / 19.725, 0))
+            shoty_pop = int(round(et_pop / 12.624, 0))
+            litry_pop = round(et_pop / 315.6, 2)
+            
+            st.markdown("**Alkohol wypity w ostatnich 30 dniach w przeliczeniu na:**")
+            kpi1, kpi2, kpi3 = st.columns(3)
+            # FIX: Zwrócono atrybuty delta oraz delta_color
+            kpi1.metric("Puszki piwa (5%)", kufle, delta=kufle - kufle_pop, delta_color="inverse")
+            kpi2.metric("Shoty wódki (40ml)", shoty, delta=shoty - shoty_pop, delta_color="inverse")
+            kpi3.metric("Litry wódki (40%)", litry, delta=round(litry - litry_pop, 2), delta_color="inverse")
+            
+            st.divider()
             c1, c2 = st.columns([2, 1])
+            kolory = alt.Scale(domain=['Piwo', 'Wódka kolorowa', 'Wódka', 'Wino', 'Inne'], range=['#f1c40f', '#e84393', '#ffffff', '#e74c3c', '#95a5a6'])
+            
             with c1:
-                df_c = df_m.groupby(['Data', 'Alkohol'])['Czysty etanol [g]'].sum().reset_index().rename(columns={'Czysty etanol [g]': 'g'})
-                st.altair_chart(alt.Chart(df_c).mark_bar(size=15).encode(x=alt.X('yearmonthdate(Data):O', axis=alt.Axis(format='%d.%m', labelAngle=-90)), y='g:Q', color=alt.Color('Alkohol:N', scale=alt.Scale(domain=['Piwo','Wódka kolorowa','Wódka','Wino','Inne'], range=['#f1c40f','#e84393','#ffffff','#e74c3c','#95a5a6']))), use_container_width=True)
+                st.markdown("**Trend**")
+                # FIX: Przywrócono kompletną warstwę wykresów (Bary + Linia)
+                bar_df = df_m.groupby(['Data', 'Alkohol'])['Czysty etanol [g]'].sum().reset_index()
+                line_df = df_m.groupby('Data')['Czysty etanol [g]'].sum().reset_index()
+                full_r = pd.date_range(start=line_df['Data'].min(), end=dzisiaj, freq='D')
+                line_df = line_df.set_index('Data').reindex(full_r, fill_value=0).reset_index().rename(columns={'index': 'Data'})
+                line_df['Trend'] = line_df['Czysty etanol [g]'].rolling(window=7, min_periods=1).mean()
+
+                bars = alt.Chart(bar_df).mark_bar(size=15).encode(
+                    x=alt.X('yearmonthdate(Data):O', title='Data', axis=alt.Axis(format='%d.%m', labelAngle=-90)),
+                    y=alt.Y('Czysty etanol [g]:Q', title='Spożycie (g)'),
+                    color=alt.Color('Alkohol:N', scale=kolory, legend=alt.Legend(title="Trunek", orient="bottom")),
+                    tooltip=[alt.Tooltip('Data:T', format='%d.%m.%Y'), 'Alkohol', 'Czysty etanol [g]']
+                )
+                line = alt.Chart(line_df).mark_line(color='#3498db', size=3, interpolate='monotone').encode(
+                    x=alt.X('yearmonthdate(Data):O'),
+                    y=alt.Y('Trend:Q')
+                )
+                st.altair_chart(bars + line, use_container_width=True)
+                
             with c2:
-                st.altair_chart(alt.Chart(df_m.groupby('Alkohol')['Czysty etanol [g]'].sum().reset_index()).mark_arc(innerRadius=50).encode(theta='Czysty etanol [g]:Q', color='Alkohol:N'), use_container_width=True)
-        
+                st.markdown("**Struktura spożycia**")
+                # FIX: Przywrócono zagubiony wykres kołowy
+                donut = alt.Chart(df_m.groupby('Alkohol')['Czysty etanol [g]'].sum().reset_index()).mark_arc(innerRadius=50).encode(
+                    theta='Czysty etanol [g]:Q', 
+                    color=alt.Color('Alkohol:N', scale=kolory, legend=alt.Legend(orient="bottom")), 
+                    tooltip=['Alkohol', 'Czysty etanol [g]']
+                ).properties(height=350)
+                st.altair_chart(donut, use_container_width=True)
+        else:
+            st.info("Brak danych z ostatnich 30 dni.")
+
         st.divider()
         st.subheader("Analiza Historyczna")
         tab1, tab2, tab3, tab4 = st.tabs(["Tydzień", "Miesiące", "Top 3: Spożycie", "Top 3: Przerwy"])
-        with tab1: st.altair_chart(alt.Chart(df.groupby('Dzień tygodnia')['Czysty etanol [g]'].mean().reset_index()).mark_bar(color='#9b59b6').encode(x=alt.X('Dzień tygodnia:N', sort=kolejnosc_dni), y='Czysty etanol [g]:Q'), use_container_width=True)
-        with tab2: st.altair_chart(alt.Chart(df[df['Miesiąc'] != 'Kwiecień'].groupby('Miesiąc')['Czysty etanol [g]'].mean().reset_index()).mark_bar(color='#f39c12').encode(x=alt.X('Miesiąc:N', sort=kolejnosc_miesiecy), y='Czysty etanol [g]:Q'), use_container_width=True)
+        
+        with tab1: 
+            st.altair_chart(alt.Chart(df.groupby('Dzień tygodnia')['Czysty etanol [g]'].mean().reset_index()).mark_bar(color='#9b59b6').encode(x=alt.X('Dzień tygodnia:N', sort=kolejnosc_dni), y='Czysty etanol [g]:Q'), use_container_width=True)
+        
+        with tab2: 
+            st.altair_chart(alt.Chart(df[df['Miesiąc'] != 'Kwiecień'].groupby('Miesiąc')['Czysty etanol [g]'].mean().reset_index()).mark_bar(color='#f39c12').encode(x=alt.X('Miesiąc:N', sort=kolejnosc_miesiecy), y='Czysty etanol [g]:Q'), use_container_width=True)
         
         with tab3:
             df_p = df.groupby(['Data', 'Dzień tygodnia'])['Czysty etanol [g]'].sum().reset_index().sort_values(by='Czysty etanol [g]', ascending=False).head(3)
-            # Kompaktowy widok Top 3 bez emotikon i z litrami
             for i, (_, r) in enumerate(df_p.iterrows()):
                 g = round(r['Czysty etanol [g]'], 1)
                 st.write(f"**{i+1}. {r['Data'].strftime('%d.%m.%Y')} ({r['Dzień tygodnia']})**")
@@ -230,6 +290,8 @@ try:
             for i in range(1, len(u_d)):
                 d = (u_d[i] - u_d[i-1]).days - 1
                 if d > 0: gaps.append({'d': d, 'ok': f"{u_d[i-1].strftime('%d.%m')} - {u_d[i].strftime('%d.%m')}"})
+            if not u_d.empty and (dzisiaj - u_d.iloc[-1]).days > 0:
+                gaps.append({'d': (dzisiaj - u_d.iloc[-1]).days, 'ok': f"{u_d.iloc[-1].strftime('%d.%m')} - Dziś (Trwa)"})
             for i, g in enumerate(sorted(gaps, key=lambda x: x['d'], reverse=True)[:3]):
                 st.write(f"**{i+1}. {g['d']} dni** ({g['ok']})")
                 st.write("---")
