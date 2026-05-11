@@ -109,8 +109,10 @@ try:
         df['Moc [%]'] = df['Moc [%]'].astype(str).str.replace(',', '.').str.replace('%', '').str.replace(' ', '').replace('', '0').astype(float)
         df['Czysty etanol [g]'] = (df['Ilość [ml]'] * (df['Moc [%]'] / 100) * 0.789).round(1)
         
-        if 'Godz.' not in df.columns: df['Godz.'] = '--:--'
-        else: df['Godz.'] = df['Godz.'].fillna('--:--').replace('', '--:--').astype(str)
+        if 'Godz.' not in df.columns: 
+            df['Godz.'] = '--:--'
+        else: 
+            df['Godz.'] = df['Godz.'].fillna('--:--').replace('', '--:--').astype(str)
         
         mapowanie = {'vk': 'Wódka kolorowa', 'p': 'Piwo', 'v': 'Wódka', 'w': 'Wino', 'i': 'Inne'}
         df['Alkohol'] = df['Alkohol'].replace(mapowanie)
@@ -130,9 +132,12 @@ try:
         streak = (dzisiaj - df['Data'].max()).days
         if streak < 0: streak = 0 
         
-        if streak == 0: st.error(f"Licznik trzeźwości: {streak} dni")
-        elif streak == 1: st.warning(f"Licznik trzeźwości: {streak} dzień")
-        else: st.success(f"Licznik trzeźwości: {streak} dni")
+        if streak == 0: 
+            st.error(f"Licznik trzeźwości: {streak} dni")
+        elif streak == 1: 
+            st.warning(f"Licznik trzeźwości: {streak} dzień")
+        else: 
+            st.success(f"Licznik trzeźwości: {streak} dni")
 
         col_top1, col_top2 = st.columns(2)
 
@@ -147,7 +152,12 @@ try:
                 mask = data['Data'].factorize()[0] % 2 == 0
                 return pd.DataFrame([['background-color: rgba(255, 255, 255, 0.08)' if m else '' for _ in data.columns] for m in mask], index=data.index, columns=data.columns)
                 
-            st.dataframe(df_final.style.apply(highlight_dates, axis=None).format({'Ilość [ml]': '{:.0f}', 'Moc [%]': '{:.1f}', 'Czysty etanol [g]': '{:.1f}'}), hide_index=True, use_container_width=True, height=350)
+            st.dataframe(
+                df_final.style.apply(highlight_dates, axis=None).format({'Ilość [ml]': '{:.0f}', 'Moc [%]': '{:.1f}', 'Czysty etanol [g]': '{:.1f}'}), 
+                hide_index=True, 
+                use_container_width=True, 
+                height=350
+            )
 
         with col_top2:
             st.subheader("Kalendarz (Miesięczny)")
@@ -158,7 +168,8 @@ try:
             with c3:
                 if st.button("Następny"): st.session_state.kalendarz_offset += 1
             aktywna = dzisiaj + pd.DateOffset(months=st.session_state.kalendarz_offset)
-            with c2: st.markdown(f"<h4 style='text-align: center;'>{aktywna.strftime('%m.%Y')}</h4>", unsafe_allow_html=True)
+            with c2: 
+                st.markdown(f"<h4 style='text-align: center;'>{aktywna.strftime('%m.%Y')}</h4>", unsafe_allow_html=True)
             
             dni_m = pd.date_range(start=aktywna.replace(day=1), end=(aktywna.replace(day=1) + pd.DateOffset(months=1)) - pd.Timedelta(days=1), freq='D')
             df_k = pd.DataFrame({'Data': dni_m}).merge(df.groupby('Data')['Czysty etanol [g]'].sum().reset_index(), on='Data', how='left').fillna(0)
@@ -316,7 +327,6 @@ try:
             df_p = df.groupby(['Data', 'Dzień tygodnia'])['Czysty etanol [g]'].sum().reset_index()
             df_p = df_p.sort_values(by='Czysty etanol [g]', ascending=False).head(3)
             
-            # ZMIANA: Zdefiniowanie algorytmu do konwersji i deklinacji gramatycznej
             def odmiana(n, f1, f2, f3):
                 if n == 1: return f"{n} {f1}"
                 if 10 < n % 100 < 15: return f"{n} {f3}"
@@ -351,8 +361,8 @@ try:
             for i, g in enumerate(sorted(gaps, key=lambda x: x['d'], reverse=True)[:3]):
                 st.write(f"**{i+1}. {g['d']} dni** ({g['ok']})")
                 st.write("---")
-        else:
-            pass 
+    else:
+        st.warning("Brak wpisów w bazie. Dodaj pierwszy trunek.")
 
-    except Exception as e:
-        st.error(f"Błąd krytyczny układu logiki: {e}")
+except Exception as e:
+    st.error(f"Błąd krytyczny układu logiki: {e}")
