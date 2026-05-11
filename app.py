@@ -59,9 +59,13 @@ try:
                 strefa_pl = ZoneInfo('Europe/Warsaw')
                 nowy_czas = datetime.datetime.now(strefa_pl).strftime('%H:%M') 
                 
+                # FIX: Zamiana kropki na przecinek, by PL Google Sheets czytał to jako ułamek
+                nowa_ilosc_str = str(nowa_ilosc).replace('.', ',')
+                nowa_moc_str = str(nowa_moc).replace('.', ',')
+                
                 try:
                     sheet.append_row(
-                        [data_str, skrot_alko, nowa_ilosc, nowa_moc, nowy_czas], 
+                        [data_str, skrot_alko, nowa_ilosc_str, nowa_moc_str, nowy_czas], 
                         value_input_option='USER_ENTERED'
                     )
                     st.success("Wpis dodany pomyślnie.")
@@ -260,7 +264,10 @@ try:
     st.divider()
     st.subheader("Panel (Ostatnie 30 dni)")
     miesiac_temu = dzisiaj - pd.Timedelta(days=30)
+    dwa_miesiace_temu = dzisiaj - pd.Timedelta(days=60)
+    
     df_miesiac = df[df['Data'] >= miesiac_temu]
+    df_poprzedni_miesiac = df[(df['Data'] >= dwa_miesiace_temu) & (df['Data'] < miesiac_temu)]
 
     if not df_miesiac.empty:
         total_etanol = df_miesiac['Czysty etanol [g]'].sum()
@@ -268,11 +275,21 @@ try:
         eq_shoty = int(round(total_etanol / 12.624, 0))
         eq_flaszki = round(total_etanol / 220.92, 1)
         
+        total_etanol_poprzedni = df_poprzedni_miesiac['Czysty etanol [g]'].sum() if not df_poprzedni_miesiac.empty else 0
+        eq_kufle_poprzednie = int(round(total_etanol_poprzedni / 19.725, 0))
+        eq_shoty_poprzednie = int(round(total_etanol_poprzedni / 12.624, 0))
+        eq_flaszki_poprzednie = round(total_etanol_poprzedni / 220.92, 1)
+        
+        delta_kufle = eq_kufle - eq_kufle_poprzednie
+        delta_shoty = eq_shoty - eq_shoty_poprzednie
+        delta_flaszki = round(eq_flaszki - eq_flaszki_poprzednie, 1)
+        
         st.markdown("**Alkohol wypity w ostatnich 30 dniach w przeliczeniu na:**")
         kpi1, kpi2, kpi3 = st.columns(3)
-        kpi1.metric("Kufle piwa (5%)", eq_kufle)
-        kpi2.metric("Shoty wódki (40ml)", eq_shoty)
-        kpi3.metric("Flaszki 0.7 (40%)", eq_flaszki)
+        # FIX: Przywrócenie parametru delta dla wskaźników trendu
+        kpi1.metric(label="Kufle piwa (5%)", value=eq_kufle, delta=int(delta_kufle), delta_color="inverse")
+        kpi2.metric(label="Shoty wódki (40ml)", value=eq_shoty, delta=int(delta_shoty), delta_color="inverse")
+        kpi3.metric(label="Flaszki 0.7 (40%)", value=eq_flaszki, delta=float(delta_flaszki), delta_color="inverse")
         
         st.divider()
         col1, col2 = st.columns([2, 1])
@@ -280,7 +297,6 @@ try:
         
         with col1:
             st.markdown("**Trend**")
-            # ZMIANA: Zmiana nazwy kolumny aby zapobiec wywalaniu się Altaira na nawiasach []
             df_chart_bars = df_miesiac.groupby(['Data', 'Dzień tygodnia', 'Alkohol'])['Czysty etanol [g]'].sum().reset_index()
             df_chart_bars = df_chart_bars.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
             
@@ -300,26 +316,25 @@ try:
             
         with col2:
             st.markdown("**Struktura spożycia**")
-            # ZMIANA: Zmiana nazwy kolumny dla wykresu kołowego
             df_donut = df_miesiac.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
             donut = alt.Chart(df_donut.groupby('Alkohol')['Etanol (g)'].sum().reset_index()).mark_arc(innerRadius=50).encode(
                 theta='Etanol (g):Q', color=alt.Color('Alkohol:N', scale=kolory_alko, legend=alt.Legend(orient="bottom")), tooltip=['Alkohol', 'Etanol (g)']
             ).properties(height=350)
             st.altair_chart(donut, use_container_width=True)
+    else:
+        st.info("Brak danych z ostatnich 30 dni w rejestrze.")
 
     st.divider()
     st.subheader("Analiza Historyczna")
     tab1, tab2, tab3, tab4 = st.tabs(["Rozkład Tygodniowy", "Podsumowanie Miesięcy", "Top 3: Spożycie", "Top 3: Przerwy"])
     
     with tab1:
-        # ZMIANA: Zmiana nazwy kolumny dla wykresu tygodniowego
         df_dni = df.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
         st.altair_chart(alt.Chart(df_dni.groupby('Dzień tygodnia')['Etanol (g)'].mean().round(1).reset_index()).mark_bar(color='#9b59b6').encode(
             x=alt.X('Dzień tygodnia:N', sort=kolejnosc_dni), y=alt.Y('Etanol (g):Q', title='Średnio etanolu (g)'), tooltip=['Dzień tygodnia', 'Etanol (g)']
         ).properties(height=300), use_container_width=True)
 
     with tab2:
-        # ZMIANA: Zmiana nazwy kolumny dla wykresu miesięcznego
         df_m = df[df['Miesiąc'] != 'Kwiecień'].rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
         df_m = df_m.groupby('Miesiąc')['Etanol (g)'].mean().round(1).reset_index()
         st.altair_chart((alt.Chart(df_m).mark_bar(color='#f39c12').encode(x=alt.X('Miesiąc:N', sort=kolejnosc_miesiecy), y=alt.Y('Etanol (g):Q', title='Średnio etanolu (g)'), tooltip=['Miesiąc', 'Etanol (g)']) + 
