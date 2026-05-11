@@ -311,4 +311,26 @@ try:
                             ).properties(height=300), use_container_width=True)
 
         with tab3:
-            df_p = df.groupby(['Data', 'Dzień tygodnia
+            df_p = df.groupby(['Data', 'Dzień tygodnia'])['Czysty etanol [g]'].sum().reset_index().sort_values(by='Czysty etanol [g]', ascending=False).head(3)
+            for i, (_, r) in enumerate(df_p.iterrows()):
+                g = round(r['Czysty etanol [g]'], 1)
+                st.write(f"**{i+1}. {r['Data'].strftime('%d.%m.%Y')} ({r['Dzień tygodnia']})**")
+                st.write(f"Etanol: {g}g | {int(round(g/19.725, 0))} puszki | {int(round(g/12.624, 0))} shoty | {round(g/315.6, 2)}l wódki")
+                st.write("---")
+
+        with tab4:
+            u_d = df['Data'].dt.normalize().drop_duplicates().sort_values().reset_index(drop=True)
+            gaps = []
+            for i in range(1, len(u_d)):
+                d = (u_d[i] - u_d[i-1]).days - 1
+                if d > 0: gaps.append({'d': d, 'ok': f"{(u_d[i-1]+pd.Timedelta(days=1)).strftime('%d.%m')} - {(u_d[i]-pd.Timedelta(days=1)).strftime('%d.%m')}"})
+            if not u_d.empty and (dzisiaj - u_d.iloc[-1]).days > 0:
+                gaps.append({'d': (dzisiaj - u_d.iloc[-1]).days, 'ok': f"{(u_d.iloc[-1]+pd.Timedelta(days=1)).strftime('%d.%m')} - Dziś (Trwa)"})
+            for i, g in enumerate(sorted(gaps, key=lambda x: x['d'], reverse=True)[:3]):
+                st.write(f"**{i+1}. {g['d']} dni** ({g['ok']})")
+                st.write("---")
+    else:
+        st.warning("Brak wpisów w bazie. Dodaj pierwszy trunek.")
+
+except Exception as e:
+    st.error(f"Błąd krytyczny układu logiki: {e}")
