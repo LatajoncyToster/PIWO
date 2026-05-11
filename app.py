@@ -163,7 +163,6 @@ try:
             df_display['Data_str'] = df_display['Data'].dt.strftime('%d.%m.%Y')
             kolumny_widoczne = ['Dzień tygodnia', 'Data_str', 'Godz.', 'Alkohol', 'Ilość [ml]', 'Moc [%]', 'Czysty etanol [g]']
             
-            # ZMIANA: Zmiana logiki wyświetlania tabeli. Odwrócono kolejność i wdrożono pionowy scroll.
             df_display_final = df_display[kolumny_widoczne].iloc[::-1].copy()
             df_display_final.columns = ['Dzień tygodnia', 'Data', 'Godz.', 'Alkohol', 'Ilość [ml]', 'Moc [%]', 'Czysty etanol [g]']
             
@@ -180,7 +179,6 @@ try:
                 'Moc [%]': '{:.1f}',
                 'Czysty etanol [g]': '{:.1f}'
             })
-            # ZMIANA: Parametr height wymusza natywne przewijanie elementu st.dataframe
             st.dataframe(styled_df, hide_index=True, use_container_width=True, height=350)
 
         with col_top2:
@@ -344,15 +342,20 @@ try:
 
         with tab3:
             df_p = df.groupby(['Data', 'Dzień tygodnia'])['Czysty etanol [g]'].sum().reset_index().sort_values(by='Czysty etanol [g]', ascending=False).head(3)
-            for i, r in df_p.iterrows():
+            # FIX: Zastosowano twarde wyliczenie numeracji za pomocą funkcji enumerate, ignorując index z Pandas
+            for i, (_, r) in enumerate(df_p.iterrows()):
                 data_format = r['Data'].strftime('%d.%m.%Y')
                 dzien = r['Dzień tygodnia']
                 gramy = r['Czysty etanol [g]']
-                eq_kufle_podium = int(round(gramy / 19.725, 0)) 
                 
-                # ZMIANA: Modyfikacja w opisie Top 3 - zamieniono słowo "piw" na "puszek piwa"
+                # ZMIANA: Implementacja dodatkowych wskaźników ekwiwalentu
+                eq_kufle_podium = int(round(gramy / 19.725, 0)) 
+                eq_shoty_podium = int(round(gramy / 12.624, 0))
+                eq_flaszki_podium = round(gramy / 220.92, 1)
+                
                 st.markdown(f"### {i+1}. **{data_format} ({dzien})**")
-                st.markdown(f"**Etanol:** {gramy}g *(Równowartość ok. {eq_kufle_podium} puszek piwa!)*")
+                st.markdown(f"**Etanol:** {gramy}g")
+                st.markdown(f"*(Równowartość ok. {eq_kufle_podium} puszek piwa 🍺 | {eq_shoty_podium} shotów wódki 🥃 | {eq_flaszki_podium} flaszki 0.7L 🍾)*")
                 st.divider()
 
         with tab4:
