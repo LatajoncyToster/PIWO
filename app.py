@@ -162,8 +162,6 @@ try:
             
             dni_m = pd.date_range(start=aktywna.replace(day=1), end=(aktywna.replace(day=1) + pd.DateOffset(months=1)) - pd.Timedelta(days=1), freq='D')
             df_k = pd.DataFrame({'Data': dni_m}).merge(df.groupby('Data')['Czysty etanol [g]'].sum().reset_index(), on='Data', how='left').fillna(0)
-            
-            # FIX: Zmiana kolumny na bezpieczną dla Vega-Lite (bez znaków [])
             df_k = df_k.rename(columns={'Czysty etanol [g]': 'Etanol'})
             
             nazwy_krotkie = {0: 'Pon', 1: 'Wto', 2: 'Śro', 3: 'Czw', 4: 'Pią', 5: 'Sob', 6: 'Nie'}
@@ -180,7 +178,6 @@ try:
                 alt.Color('Etanol:Q', scale=alt.Scale(scheme='reds'), legend=alt.Legend(title="Etanol (g)"))
             )
             heatmap = alt.Chart(df_k).mark_rect(stroke='gray', strokeWidth=0.5, cornerRadius=3).encode(
-                # FIX: Przywrócono labelAngle=0, żeby dni tygodnia były poziomo
                 x=alt.X('Nazwa_dnia:N', sort=kolejnosc_kalendarza, title=None, axis=alt.Axis(labelAngle=0)),
                 y=alt.Y('Rząd_tygodnia:O', title=None, axis=alt.Axis(labels=False, ticks=False)), 
                 color=kolorowanie,
@@ -196,16 +193,16 @@ try:
             st.altair_chart(heatmap + text, use_container_width=True)
 
         st.subheader("Tygodnie")
-        najblizsza_niedziela = dzisiaj + pd.Timedelta(days=(6 - dzisiaj.dayofweek))
-        rok_temu_tydzien = najblizsza_niedziela - pd.Timedelta(days=364)
+        niedziela = dzisiaj + pd.Timedelta(days=(6 - dzisiaj.dayofweek))
+        rok_temu_tydzien = niedziela - pd.Timedelta(days=364)
         df_52 = df[df['Data'] >= rok_temu_tydzien].copy()
         df_tygodnie = pd.DataFrame({'Tydzień_Offset': range(51, -1, -1)})
-        df_tygodnie['Koniec_Tyg'] = najblizsza_niedziela - pd.to_timedelta(df_tygodnie['Tydzień_Offset'] * 7, unit='D')
+        df_tygodnie['Koniec_Tyg'] = niedziela - pd.to_timedelta(df_tygodnie['Tydzień_Offset'] * 7, unit='D')
         df_tygodnie['Poczatek_Tyg'] = df_tygodnie['Koniec_Tyg'] - pd.Timedelta(days=6)
         df_tygodnie['Zakres_Dat'] = df_tygodnie['Poczatek_Tyg'].dt.strftime('%d.%m') + " - " + df_tygodnie['Koniec_Tyg'].dt.strftime('%d.%m')
         
         if not df_52.empty:
-            df_52['Tydzień_Offset'] = ((najblizsza_niedziela - df_52['Data']).dt.days // 7)
+            df_52['Tydzień_Offset'] = ((niedziela - df_52['Data']).dt.days // 7)
             weekly_sum = df_52.groupby('Tydzień_Offset')['Czysty etanol [g]'].sum().reset_index()
             df_heatmap_tyg = pd.merge(df_tygodnie, weekly_sum, on='Tydzień_Offset', how='left').fillna(0)
         else:
@@ -214,7 +211,6 @@ try:
 
         df_heatmap_tyg['Tydzień_Num'] = range(1, 53)
         df_heatmap_tyg['Wiersz'] = 'Postęp'
-        # FIX: Zmiana kolumny na bezpieczną dla Vega-Lite (bez znaków [])
         df_heatmap_tyg = df_heatmap_tyg.rename(columns={'Czysty etanol [g]': 'Etanol'})
         
         heatmap_tygodniowa = alt.Chart(df_heatmap_tyg).mark_rect(stroke='#2d303e', strokeWidth=1, cornerRadius=2).encode(
@@ -260,7 +256,6 @@ try:
             
             with col1:
                 st.markdown("**Trend**")
-                # FIX: Zmiana nazwy kolumny aby zapobiec wywalaniu się Altaira na nawiasach []
                 df_chart_bars = df_miesiac.groupby(['Data', 'Alkohol'])['Czysty etanol [g]'].sum().reset_index()
                 df_chart_bars = df_chart_bars.rename(columns={'Czysty etanol [g]': 'Etanol'})
                 
@@ -300,22 +295,46 @@ try:
         with tab1:
             df_dni = df.rename(columns={'Czysty etanol [g]': 'Etanol'})
             st.altair_chart(alt.Chart(df_dni.groupby('Dzień tygodnia')['Etanol'].mean().round(1).reset_index()).mark_bar(color='#9b59b6').encode(
-                x=alt.X('Dzień tygodnia:N', sort=kolejnosc_dni), y=alt.Y('Etanol:Q', title='Średnio etanolu (g)'), tooltip=['Dzień tygodnia', alt.Tooltip('Etanol:Q', title='Etanol (g)')]
+                x=alt.X('Dzień tygodnia:N', sort=kolejnosc_dni), 
+                y=alt.Y('Etanol:Q', title='Średnio etanolu (g)'), 
+                tooltip=['Dzień tygodnia', alt.Tooltip('Etanol:Q', title='Etanol (g)')]
             ).properties(height=300), use_container_width=True)
 
         with tab2:
             df_m = df[df['Miesiąc'] != 'Kwiecień'].rename(columns={'Czysty etanol [g]': 'Etanol'})
             df_m = df_m.groupby('Miesiąc')['Etanol'].mean().round(1).reset_index()
-            st.altair_chart((alt.Chart(df_m).mark_bar(color='#f39c12').encode(x=alt.X('Miesiąc:N', sort=kolejnosc_miesiecy), y=alt.Y('Etanol:Q', title='Średnio etanolu (g)'), tooltip=['Miesiąc', alt.Tooltip('Etanol:Q', title='Etanol (g)')]) + 
-                             alt.Chart(df_m).mark_line(color='#e74c3c', size=3, interpolate='monotone').encode(x=alt.X('Miesiąc:N', sort=kolejnosc_miesiecy), y='Etanol:Q')
+            st.altair_chart((alt.Chart(df_m).mark_bar(color='#f39c12').encode(
+                                x=alt.X('Miesiąc:N', sort=kolejnosc_miesiecy), 
+                                y=alt.Y('Etanol:Q', title='Średnio etanolu (g)'), 
+                                tooltip=['Miesiąc', alt.Tooltip('Etanol:Q', title='Etanol (g)')]) + 
+                             alt.Chart(df_m).mark_line(color='#e74c3c', size=3, interpolate='monotone').encode(
+                                x=alt.X('Miesiąc:N', sort=kolejnosc_miesiecy), 
+                                y='Etanol:Q')
                             ).properties(height=300), use_container_width=True)
 
         with tab3:
-            df_p = df.groupby(['Data', 'Dzień tygodnia'])['Czysty etanol [g]'].sum().reset_index().sort_values(by='Czysty etanol [g]', ascending=False).head(3)
+            df_p = df.groupby(['Data', 'Dzień tygodnia'])['Czysty etanol [g]'].sum().reset_index()
+            df_p = df_p.sort_values(by='Czysty etanol [g]', ascending=False).head(3)
+            
+            # ZMIANA: Zdefiniowanie algorytmu do konwersji i deklinacji gramatycznej
+            def odmiana(n, f1, f2, f3):
+                if n == 1: return f"{n} {f1}"
+                if 10 < n % 100 < 15: return f"{n} {f3}"
+                if n % 10 in [2, 3, 4]: return f"{n} {f2}"
+                return f"{n} {f3}"
+            
             for i, (_, r) in enumerate(df_p.iterrows()):
                 g = round(r['Czysty etanol [g]'], 1)
+                
+                ilosc_piw = int(round(g/19.725, 0))
+                ilosc_shotow = int(round(g/12.624, 0))
+                litry_wodki = round(g/315.6, 2)
+                
+                txt_piwa = odmiana(ilosc_piw, "piwo", "piwa", "piw")
+                txt_shoty = odmiana(ilosc_shotow, "shot", "shoty", "shotów")
+                
                 st.write(f"**{i+1}. {r['Data'].strftime('%d.%m.%Y')} ({r['Dzień tygodnia']})**")
-                st.write(f"Etanol: {g}g | {int(round(g/19.725, 0))} puszki | {int(round(g/12.624, 0))} shoty | {round(g/315.6, 2)}l wódki")
+                st.write(f"Etanol: {g}g | {txt_piwa} | {txt_shoty} | {litry_wodki}l wódki")
                 st.write("---")
 
         with tab4:
@@ -323,14 +342,17 @@ try:
             gaps = []
             for i in range(1, len(u_d)):
                 d = (u_d[i] - u_d[i-1]).days - 1
-                if d > 0: gaps.append({'d': d, 'ok': f"{(u_d[i-1]+pd.Timedelta(days=1)).strftime('%d.%m')} - {(u_d[i]-pd.Timedelta(days=1)).strftime('%d.%m')}"})
+                if d > 0: 
+                    gaps.append({'d': d, 'ok': f"{(u_d[i-1]+pd.Timedelta(days=1)).strftime('%d.%m')} - {(u_d[i]-pd.Timedelta(days=1)).strftime('%d.%m')}"})
+            
             if not u_d.empty and (dzisiaj - u_d.iloc[-1]).days > 0:
                 gaps.append({'d': (dzisiaj - u_d.iloc[-1]).days, 'ok': f"{(u_d.iloc[-1]+pd.Timedelta(days=1)).strftime('%d.%m')} - Dziś (Trwa)"})
+            
             for i, g in enumerate(sorted(gaps, key=lambda x: x['d'], reverse=True)[:3]):
                 st.write(f"**{i+1}. {g['d']} dni** ({g['ok']})")
                 st.write("---")
-    else:
-        st.warning("Brak wpisów w bazie. Dodaj pierwszy trunek.")
+        else:
+            pass 
 
-except Exception as e:
-    st.error(f"Błąd krytyczny układu logiki: {e}")
+    except Exception as e:
+        st.error(f"Błąd krytyczny układu logiki: {e}")
