@@ -36,7 +36,6 @@ try:
     client = get_gspread_client()
     sheet = client.open('PIWO').sheet1 
     
-    # ZMIANA: Pobieranie surowych wartości (get_all_values) zapobiega usuwaniu przecinków przez gspread
     @st.cache_data(ttl=600)
     def fetch_data():
         dane_surowe = sheet.get_all_values()
@@ -163,7 +162,9 @@ try:
             df_display = df.copy()
             df_display['Data_str'] = df_display['Data'].dt.strftime('%d.%m.%Y')
             kolumny_widoczne = ['Dzień tygodnia', 'Data_str', 'Godz.', 'Alkohol', 'Ilość [ml]', 'Moc [%]', 'Czysty etanol [g]']
-            df_display_final = df_display[kolumny_widoczne].tail(10).copy()
+            
+            # ZMIANA: Zmiana logiki wyświetlania tabeli. Odwrócono kolejność i wdrożono pionowy scroll.
+            df_display_final = df_display[kolumny_widoczne].iloc[::-1].copy()
             df_display_final.columns = ['Dzień tygodnia', 'Data', 'Godz.', 'Alkohol', 'Ilość [ml]', 'Moc [%]', 'Czysty etanol [g]']
             
             def highlight_alternating_dates(data):
@@ -179,7 +180,8 @@ try:
                 'Moc [%]': '{:.1f}',
                 'Czysty etanol [g]': '{:.1f}'
             })
-            st.dataframe(styled_df, hide_index=True, use_container_width=True)
+            # ZMIANA: Parametr height wymusza natywne przewijanie elementu st.dataframe
+            st.dataframe(styled_df, hide_index=True, use_container_width=True, height=350)
 
         with col_top2:
             st.subheader("Kalendarz Spożycia (Miesięczny)")
@@ -343,7 +345,14 @@ try:
         with tab3:
             df_p = df.groupby(['Data', 'Dzień tygodnia'])['Czysty etanol [g]'].sum().reset_index().sort_values(by='Czysty etanol [g]', ascending=False).head(3)
             for i, r in df_p.iterrows():
-                st.markdown(f"### {r['Data'].strftime('%d.%m.%Y')} ({r['Dzień tygodnia']}) - {r['Czysty etanol [g]']}g")
+                data_format = r['Data'].strftime('%d.%m.%Y')
+                dzien = r['Dzień tygodnia']
+                gramy = r['Czysty etanol [g]']
+                eq_kufle_podium = int(round(gramy / 19.725, 0)) 
+                
+                # ZMIANA: Modyfikacja w opisie Top 3 - zamieniono słowo "piw" na "puszek piwa"
+                st.markdown(f"### {i+1}. **{data_format} ({dzien})**")
+                st.markdown(f"**Etanol:** {gramy}g *(Równowartość ok. {eq_kufle_podium} puszek piwa!)*")
                 st.divider()
 
         with tab4:
@@ -354,8 +363,9 @@ try:
                 if d > 0: gaps.append({'Dni': d, 'Okres': f"{(u_d[i-1]+pd.Timedelta(days=1)).strftime('%d.%m')} - {(u_d[i]-pd.Timedelta(days=1)).strftime('%d.%m')}"})
             if not u_d.empty and (dzisiaj - u_d.iloc[-1]).days > 0:
                 gaps.append({'Dni': (dzisiaj - u_d.iloc[-1]).days, 'Okres': f"{(u_d.iloc[-1]+pd.Timedelta(days=1)).strftime('%d.%m')} - Dziś (Trwa)"})
-            for g in sorted(gaps, key=lambda x: x['Dni'], reverse=True)[:3]:
-                st.markdown(f"### {g['Dni']} dni ({g['Okres']})"); st.divider()
+            for i, g in enumerate(sorted(gaps, key=lambda x: x['Dni'], reverse=True)[:3]):
+                st.markdown(f"### {i+1}. **{g['Dni']} dni** ({g['Okres']})")
+                st.divider()
     else:
         st.warning("Brak wpisów w bazie. Dodaj pierwszy trunek.")
 
