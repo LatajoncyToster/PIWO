@@ -60,7 +60,6 @@ try:
                 nowy_czas = datetime.datetime.now(strefa_pl).strftime('%H:%M') 
                 
                 try:
-                    # FIX: value_input_option='USER_ENTERED' zapobiega zamianie 5.2 na 52 w arkuszach z PL locale
                     sheet.append_row(
                         [data_str, skrot_alko, nowa_ilosc, nowa_moc, nowy_czas], 
                         value_input_option='USER_ENTERED'
@@ -203,7 +202,9 @@ try:
         df_kalendarz = df_kalendarz.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
         
         nazwy_krotkie = {0: 'Pon', 1: 'Wto', 2: 'Śro', 3: 'Czw', 4: 'Pią', 5: 'Sob', 6: 'Nie'}
+        pelne_nazwy = {0: 'Poniedziałek', 1: 'Wtorek', 2: 'Środa', 3: 'Czwartek', 4: 'Piątek', 5: 'Sobota', 6: 'Niedziela'}
         df_kalendarz['Nazwa_dnia'] = df_kalendarz['Data'].dt.dayofweek.map(nazwy_krotkie)
+        df_kalendarz['Pełny_dzień'] = df_kalendarz['Data'].dt.dayofweek.map(pelne_nazwy)
         df_kalendarz['Dzień_miesiąca'] = df_kalendarz['Data'].dt.day.astype(str)
         df_kalendarz['Rząd_tygodnia'] = df_kalendarz['Data'].apply(lambda d: (d.day - 1 + d.replace(day=1).weekday()) // 7)
         kolejnosc_kalendarza = ['Pon', 'Wto', 'Śro', 'Czw', 'Pią', 'Sob', 'Nie']
@@ -217,7 +218,7 @@ try:
             x=alt.X('Nazwa_dnia:N', sort=kolejnosc_kalendarza, title=None),
             y=alt.Y('Rząd_tygodnia:O', title=None, axis=alt.Axis(labels=False, ticks=False)), 
             color=kolorowanie,
-            tooltip=[alt.Tooltip('Data:T', format='%d.%m.%Y'), 'Etanol (g)']
+            tooltip=[alt.Tooltip('Data:T', format='%d.%m.%Y'), alt.Tooltip('Pełny_dzień:N', title='Dzień'), 'Etanol (g)']
         ).properties(height=250)
         
         text = alt.Chart(df_kalendarz).mark_text(baseline='middle').encode(
@@ -279,7 +280,10 @@ try:
         
         with col1:
             st.markdown("**Trend**")
+            # ZMIANA: Zmiana nazwy kolumny aby zapobiec wywalaniu się Altaira na nawiasach []
             df_chart_bars = df_miesiac.groupby(['Data', 'Dzień tygodnia', 'Alkohol'])['Czysty etanol [g]'].sum().reset_index()
+            df_chart_bars = df_chart_bars.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
+            
             df_chart_line = df_miesiac.groupby('Data')['Czysty etanol [g]'].sum().reset_index()
             full_range = pd.date_range(start=df_chart_line['Data'].min(), end=dzisiaj, freq='D')
             df_chart_line = df_chart_line.set_index('Data').reindex(full_range, fill_value=0).reset_index().rename(columns={'index': 'Data'})
@@ -287,17 +291,19 @@ try:
 
             bars = alt.Chart(df_chart_bars).mark_bar(size=15).encode(
                 x=alt.X('yearmonthdate(Data):O', title='Data', axis=alt.Axis(format='%d.%m', labelAngle=-90)),
-                y=alt.Y('Czysty etanol [g]:Q', title='Spożycie (g)'),
+                y=alt.Y('Etanol (g):Q', title='Spożycie (g)'),
                 color=alt.Color('Alkohol:N', scale=kolory_alko, legend=alt.Legend(title="Trunek", orient="bottom")),
-                tooltip=[alt.Tooltip('Data:T', format='%d.%m.%Y'), 'Dzień tygodnia', 'Alkohol', 'Czysty etanol [g]']
+                tooltip=[alt.Tooltip('Data:T', format='%d.%m.%Y'), 'Dzień tygodnia', 'Alkohol', 'Etanol (g)']
             )
             line = alt.Chart(df_chart_line).mark_line(color='#3498db', size=3, interpolate='monotone').encode(x='yearmonthdate(Data):O', y='Trend (7-dniowy):Q')
             st.altair_chart(bars + line, use_container_width=True)
             
         with col2:
             st.markdown("**Struktura spożycia**")
-            donut = alt.Chart(df_miesiac.groupby('Alkohol')['Czysty etanol [g]'].sum().reset_index()).mark_arc(innerRadius=50).encode(
-                theta='Czysty etanol [g]:Q', color=alt.Color('Alkohol:N', scale=kolory_alko, legend=alt.Legend(orient="bottom")), tooltip=['Alkohol', 'Czysty etanol [g]']
+            # ZMIANA: Zmiana nazwy kolumny dla wykresu kołowego
+            df_donut = df_miesiac.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
+            donut = alt.Chart(df_donut.groupby('Alkohol')['Etanol (g)'].sum().reset_index()).mark_arc(innerRadius=50).encode(
+                theta='Etanol (g):Q', color=alt.Color('Alkohol:N', scale=kolory_alko, legend=alt.Legend(orient="bottom")), tooltip=['Alkohol', 'Etanol (g)']
             ).properties(height=350)
             st.altair_chart(donut, use_container_width=True)
 
@@ -306,14 +312,18 @@ try:
     tab1, tab2, tab3, tab4 = st.tabs(["Rozkład Tygodniowy", "Podsumowanie Miesięcy", "Top 3: Spożycie", "Top 3: Przerwy"])
     
     with tab1:
-        st.altair_chart(alt.Chart(df.groupby('Dzień tygodnia')['Czysty etanol [g]'].mean().round(1).reset_index()).mark_bar(color='#9b59b6').encode(
-            x=alt.X('Dzień tygodnia:N', sort=kolejnosc_dni), y='Czysty etanol [g]:Q', tooltip=['Dzień tygodnia', 'Czysty etanol [g]']
+        # ZMIANA: Zmiana nazwy kolumny dla wykresu tygodniowego
+        df_dni = df.rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
+        st.altair_chart(alt.Chart(df_dni.groupby('Dzień tygodnia')['Etanol (g)'].mean().round(1).reset_index()).mark_bar(color='#9b59b6').encode(
+            x=alt.X('Dzień tygodnia:N', sort=kolejnosc_dni), y=alt.Y('Etanol (g):Q', title='Średnio etanolu (g)'), tooltip=['Dzień tygodnia', 'Etanol (g)']
         ).properties(height=300), use_container_width=True)
 
     with tab2:
-        df_m = df[df['Miesiąc'] != 'Kwiecień'].groupby('Miesiąc')['Czysty etanol [g]'].mean().round(1).reset_index()
-        st.altair_chart((alt.Chart(df_m).mark_bar(color='#f39c12').encode(x=alt.X('Miesiąc:N', sort=kolejnosc_miesiecy), y='Czysty etanol [g]:Q') + 
-                         alt.Chart(df_m).mark_line(color='#e74c3c', size=3, interpolate='monotone').encode(x=alt.X('Miesiąc:N', sort=kolejnosc_miesiecy), y='Czysty etanol [g]:Q')
+        # ZMIANA: Zmiana nazwy kolumny dla wykresu miesięcznego
+        df_m = df[df['Miesiąc'] != 'Kwiecień'].rename(columns={'Czysty etanol [g]': 'Etanol (g)'})
+        df_m = df_m.groupby('Miesiąc')['Etanol (g)'].mean().round(1).reset_index()
+        st.altair_chart((alt.Chart(df_m).mark_bar(color='#f39c12').encode(x=alt.X('Miesiąc:N', sort=kolejnosc_miesiecy), y=alt.Y('Etanol (g):Q', title='Średnio etanolu (g)'), tooltip=['Miesiąc', 'Etanol (g)']) + 
+                         alt.Chart(df_m).mark_line(color='#e74c3c', size=3, interpolate='monotone').encode(x=alt.X('Miesiąc:N', sort=kolejnosc_miesiecy), y='Etanol (g):Q')
                         ).properties(height=300), use_container_width=True)
 
     with tab3:
