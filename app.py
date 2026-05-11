@@ -59,15 +59,9 @@ try:
                 strefa_pl = ZoneInfo('Europe/Warsaw')
                 nowy_czas = datetime.datetime.now(strefa_pl).strftime('%H:%M') 
                 
-                # FIX: Zamiana kropki na przecinek, by PL Google Sheets czytał to jako ułamek
-                nowa_ilosc_str = str(nowa_ilosc).replace('.', ',')
-                nowa_moc_str = str(nowa_moc).replace('.', ',')
-                
                 try:
-                    sheet.append_row(
-                        [data_str, skrot_alko, nowa_ilosc_str, nowa_moc_str, nowy_czas], 
-                        value_input_option='USER_ENTERED'
-                    )
+                    # FIX: Natywne operacje numeryczne bez rzutowania na tekst
+                    sheet.append_row([data_str, skrot_alko, float(nowa_ilosc), float(nowa_moc), nowy_czas])
                     st.success("Wpis dodany pomyślnie.")
                     fetch_data.clear() 
                     st.rerun() 
@@ -104,7 +98,8 @@ try:
                         if len(ostatni_rekord) >= 5:
                             ostatni_rekord[4] = aktualny_czas
                         
-                        sheet.append_row(ostatni_rekord, value_input_option='USER_ENTERED')
+                        # FIX: Brak dodatkowych parametrów zmieniających interpretację danych
+                        sheet.append_row(ostatni_rekord)
                         st.success("Wprowadzono powielony rekord.")
                         fetch_data.clear() 
                         st.rerun()
@@ -117,8 +112,9 @@ try:
     data = fetch_data()
     df = pd.DataFrame(data)
 
-    df['Ilość [ml]'] = df['Ilość [ml]'].astype(str).str.replace(',', '.').replace('', '0').astype(float)
-    df['Moc [%]'] = df['Moc [%]'].astype(str).str.replace(',', '.').replace('', '0').astype(float)
+    # FIX: Zaawansowane czyszczenie wektorowe odrzucające ukryte znaki formatujące
+    df['Ilość [ml]'] = df['Ilość [ml]'].astype(str).str.replace(',', '.').str.replace(' ', '').replace('', '0').astype(float)
+    df['Moc [%]'] = df['Moc [%]'].astype(str).str.replace(',', '.').str.replace('%', '').str.replace(' ', '').replace('', '0').astype(float)
     df['Czysty etanol [g]'] = (df['Ilość [ml]'] * (df['Moc [%]'] / 100) * 0.789).round(1)
     
     if 'Godz.' not in df.columns:
@@ -286,7 +282,6 @@ try:
         
         st.markdown("**Alkohol wypity w ostatnich 30 dniach w przeliczeniu na:**")
         kpi1, kpi2, kpi3 = st.columns(3)
-        # FIX: Przywrócenie parametru delta dla wskaźników trendu
         kpi1.metric(label="Kufle piwa (5%)", value=eq_kufle, delta=int(delta_kufle), delta_color="inverse")
         kpi2.metric(label="Shoty wódki (40ml)", value=eq_shoty, delta=int(delta_shoty), delta_color="inverse")
         kpi3.metric(label="Flaszki 0.7 (40%)", value=eq_flaszki, delta=float(delta_flaszki), delta_color="inverse")
