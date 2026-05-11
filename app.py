@@ -111,6 +111,11 @@ try:
                         st.warning("Baza danych jest pusta.")
                 except Exception as e:
                     st.error(f"Błąd: {e}")
+        
+        # ZMIANA: Dodano przycisk twardego resetu bufora
+        if st.button("Odśwież dane", use_container_width=True):
+            fetch_data.clear()
+            st.rerun()
 
     # --- POBIERANIE I CZYSZCZENIE DANYCH ---
     df = fetch_data()
@@ -342,13 +347,11 @@ try:
 
         with tab3:
             df_p = df.groupby(['Data', 'Dzień tygodnia'])['Czysty etanol [g]'].sum().reset_index().sort_values(by='Czysty etanol [g]', ascending=False).head(3)
-            # FIX: Zastosowano twarde wyliczenie numeracji za pomocą funkcji enumerate, ignorując index z Pandas
             for i, (_, r) in enumerate(df_p.iterrows()):
                 data_format = r['Data'].strftime('%d.%m.%Y')
                 dzien = r['Dzień tygodnia']
                 gramy = r['Czysty etanol [g]']
                 
-                # ZMIANA: Implementacja dodatkowych wskaźników ekwiwalentu
                 eq_kufle_podium = int(round(gramy / 19.725, 0)) 
                 eq_shoty_podium = int(round(gramy / 12.624, 0))
                 eq_flaszki_podium = round(gramy / 220.92, 1)
