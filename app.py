@@ -60,8 +60,11 @@ try:
                 nowy_czas = datetime.datetime.now(strefa_pl).strftime('%H:%M') 
                 
                 try:
-                    # FIX: Natywne operacje numeryczne bez rzutowania na tekst
-                    sheet.append_row([data_str, skrot_alko, float(nowa_ilosc), float(nowa_moc), nowy_czas])
+                    # FIX: Tryb RAW zabrania arkuszom Google jakiejkolwiek interpretacji liczb (rozwiązuje problem z separatorem)
+                    sheet.append_row(
+                        [data_str, skrot_alko, float(nowa_ilosc), float(nowa_moc), nowy_czas], 
+                        value_input_option='RAW'
+                    )
                     st.success("Wpis dodany pomyślnie.")
                     fetch_data.clear() 
                     st.rerun() 
@@ -98,8 +101,7 @@ try:
                         if len(ostatni_rekord) >= 5:
                             ostatni_rekord[4] = aktualny_czas
                         
-                        # FIX: Brak dodatkowych parametrów zmieniających interpretację danych
-                        sheet.append_row(ostatni_rekord)
+                        sheet.append_row(ostatni_rekord, value_input_option='RAW')
                         st.success("Wprowadzono powielony rekord.")
                         fetch_data.clear() 
                         st.rerun()
@@ -112,8 +114,7 @@ try:
     data = fetch_data()
     df = pd.DataFrame(data)
 
-    # FIX: Zaawansowane czyszczenie wektorowe odrzucające ukryte znaki formatujące
-    df['Ilość [ml]'] = df['Ilość [ml]'].astype(str).str.replace(',', '.').str.replace(' ', '').replace('', '0').astype(float)
+    df['Ilość [ml]'] = df['Ilość [ml]'].astype(str).str.replace(',', '.').replace(' ', '').replace('', '0').astype(float)
     df['Moc [%]'] = df['Moc [%]'].astype(str).str.replace(',', '.').str.replace('%', '').str.replace(' ', '').replace('', '0').astype(float)
     df['Czysty etanol [g]'] = (df['Ilość [ml]'] * (df['Moc [%]'] / 100) * 0.789).round(1)
     
