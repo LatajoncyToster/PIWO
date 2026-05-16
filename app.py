@@ -132,12 +132,25 @@ try:
         streak = (dzisiaj - df['Data'].max()).days
         if streak < 0: streak = 0 
         
-        if streak == 0: 
-            st.error(f"Licznik trzeźwości: {streak} dni")
-        elif streak == 1: 
-            st.warning(f"Licznik trzeźwości: {streak} dzień")
-        else: 
-            st.success(f"Licznik trzeźwości: {streak} dni")
+        # ZMIANA: Implementacja wielostopniowego mapowania HTML/CSS dla licznika
+        if streak == 0:
+            c_text, c_bg = "#ff4b4b", "rgba(255, 75, 75, 0.15)"
+            txt = f"Licznik trzeźwości: {streak} dni"
+        elif streak == 1:
+            c_text, c_bg = "#ff8c00", "rgba(255, 140, 0, 0.15)"
+            txt = f"Licznik trzeźwości: {streak} dzień"
+        elif streak == 2:
+            c_text, c_bg = "#ffbd45", "rgba(255, 189, 69, 0.15)"
+            txt = f"Licznik trzeźwości: {streak} dni"
+        else:
+            c_text, c_bg = "#21c354", "rgba(33, 195, 84, 0.15)"
+            txt = f"Licznik trzeźwości: {streak} dni"
+
+        st.markdown(f'''
+        <div style="background-color: {c_bg}; color: {c_text}; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; border: 1px solid {c_text}40;">
+            {txt}
+        </div>
+        ''', unsafe_allow_html=True)
 
         col_top1, col_top2 = st.columns(2)
 
@@ -361,8 +374,6 @@ try:
             for i, g in enumerate(sorted(gaps, key=lambda x: x['d'], reverse=True)[:3]):
                 st.write(f"**{i+1}. {g['d']} dni** ({g['ok']})")
                 st.write("---")
-    else:
-        st.warning("Brak wpisów w bazie. Dodaj pierwszy trunek.")
 
-except Exception as e:
-    st.error(f"Błąd krytyczny układu logiki: {e}")
+    except Exception as e:
+        st.error(f"Błąd krytyczny układu logiki: {e}")
