@@ -32,6 +32,7 @@ def get_gspread_client():
     creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
     return gspread.authorize(creds)
 
+# GŁÓWNY BLOK TRY
 try:
     client = get_gspread_client()
     sheet = client.open('PIWO').sheet1 
@@ -132,7 +133,6 @@ try:
         streak = (dzisiaj - df['Data'].max()).days
         if streak < 0: streak = 0 
         
-        # ZMIANA: Implementacja wielostopniowego mapowania HTML/CSS dla licznika
         if streak == 0:
             c_text, c_bg = "#ff4b4b", "rgba(255, 75, 75, 0.15)"
             txt = f"Licznik trzeźwości: {streak} dni"
@@ -194,7 +194,6 @@ try:
             df_k['Pełny_dzień'] = df_k['Data'].dt.dayofweek.map(pelne_nazwy)
             df_k['Dzień_miesiąca'] = df_k['Data'].dt.day.astype(str)
             df_k['Rząd_tygodnia'] = df_k['Data'].apply(lambda d: (d.day - 1 + d.replace(day=1).weekday()) // 7)
-            kolejnosc_kalendarza = ['Pon', 'Wto', 'Śro', 'Czw', 'Pią', 'Sob', 'Nie']
             
             kolorowanie = alt.condition(
                 alt.datum['Etanol'] == 0,
@@ -375,5 +374,9 @@ try:
                 st.write(f"**{i+1}. {g['d']} dni** ({g['ok']})")
                 st.write("---")
 
-    except Exception as e:
-        st.error(f"Błąd krytyczny układu logiki: {e}")
+    else:
+        st.warning("Brak wpisów w bazie. Dodaj pierwszy trunek.")
+
+# BLOK EXCEPT ZROWNANY DO LEWEJ
+except Exception as e:
+    st.error(f"Błąd krytyczny układu logiki: {e}")
