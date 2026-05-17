@@ -32,7 +32,6 @@ def get_gspread_client():
     creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
     return gspread.authorize(creds)
 
-# GŁÓWNY BLOK TRY
 try:
     client = get_gspread_client()
     sheet = client.open('PIWO').sheet1 
@@ -194,6 +193,9 @@ try:
             df_k['Pełny_dzień'] = df_k['Data'].dt.dayofweek.map(pelne_nazwy)
             df_k['Dzień_miesiąca'] = df_k['Data'].dt.day.astype(str)
             df_k['Rząd_tygodnia'] = df_k['Data'].apply(lambda d: (d.day - 1 + d.replace(day=1).weekday()) // 7)
+            
+            # ZMIANA: Przywrócenie zmiennej odpowiedzialnej za sortowanie dni w kalendarzu
+            kolejnosc_kalendarza = ['Pon', 'Wto', 'Śro', 'Czw', 'Pią', 'Sob', 'Nie']
             
             kolorowanie = alt.condition(
                 alt.datum['Etanol'] == 0,
@@ -377,6 +379,5 @@ try:
     else:
         st.warning("Brak wpisów w bazie. Dodaj pierwszy trunek.")
 
-# BLOK EXCEPT ZROWNANY DO LEWEJ
 except Exception as e:
     st.error(f"Błąd krytyczny układu logiki: {e}")
