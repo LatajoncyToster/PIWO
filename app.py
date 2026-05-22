@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import gspread
 import altair as alt
+import numpy as np
 from oauth2client.service_account import ServiceAccountCredentials
 import datetime
 from zoneinfo import ZoneInfo
@@ -194,9 +195,6 @@ try:
             df_k['Dzień_miesiąca'] = df_k['Data'].dt.day.astype(str)
             df_k['Rząd_tygodnia'] = df_k['Data'].apply(lambda d: (d.day - 1 + d.replace(day=1).weekday()) // 7)
             
-            # ZMIANA: Przywrócenie zmiennej odpowiedzialnej za sortowanie dni w kalendarzu
-            kolejnosc_kalendarza = ['Pon', 'Wto', 'Śro', 'Czw', 'Pią', 'Sob', 'Nie']
-            
             kolorowanie = alt.condition(
                 alt.datum['Etanol'] == 0,
                 alt.value('#27ae60'),
@@ -287,7 +285,16 @@ try:
                 df_chart_line = df_miesiac.groupby('Data')['Czysty etanol [g]'].sum().reset_index()
                 full_range = pd.date_range(start=df_chart_line['Data'].min(), end=dzisiaj, freq='D')
                 df_chart_line = df_chart_line.set_index('Data').reindex(full_range, fill_value=0).reset_index().rename(columns={'index': 'Data'})
-                df_chart_line['Trend'] = df_chart_line['Czysty etanol [g]'].rolling(window=7, min_periods=1).mean()
+                
+                # ZMIANA: Zastąpienie średniej kroczącej surową regresją liniową za pomocą NumPy
+                x_vals = np.arange(len(df_chart_line))
+                y_vals = df_chart_line['Czysty etanol [g]'].values
+                if len(x_vals) > 1:
+                    z = np.polyfit(x_vals, y_vals, 1)
+                    p = np.poly1d(z)
+                    df_chart_line['Trend'] = np.clip(p(x_vals), a_min=0, a_max=None)
+                else:
+                    df_chart_line['Trend'] = y_vals
 
                 bars = alt.Chart(df_chart_bars).mark_bar(size=15).encode(
                     x=alt.X('yearmonthdate(Data):O', title='Data', axis=alt.Axis(format='%d.%m', labelAngle=-90)),
@@ -295,7 +302,9 @@ try:
                     color=alt.Color('Alkohol:N', scale=kolory_alko, legend=alt.Legend(title="Trunek", orient="bottom")),
                     tooltip=[alt.Tooltip('Data:T', format='%d.%m.%Y', title='Data'), 'Alkohol', alt.Tooltip('Etanol:Q', title='Etanol (g)')]
                 )
-                line = alt.Chart(df_chart_line).mark_line(color='#3498db', size=3, interpolate='monotone').encode(
+                
+                # ZMIANA: Stylizacja linii na czerwoną, przerywaną (wizualizacja regresji)
+                line = alt.Chart(df_chart_line).mark_line(color='#e74c3c', size=3, strokeDash=[5, 5]).encode(
                     x=alt.X('yearmonthdate(Data):O'), 
                     y=alt.Y('Trend:Q')
                 )
