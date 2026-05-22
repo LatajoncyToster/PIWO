@@ -195,6 +195,8 @@ try:
             df_k['Dzień_miesiąca'] = df_k['Data'].dt.day.astype(str)
             df_k['Rząd_tygodnia'] = df_k['Data'].apply(lambda d: (d.day - 1 + d.replace(day=1).weekday()) // 7)
             
+            kolejnosc_kalendarza = ['Pon', 'Wto', 'Śro', 'Czw', 'Pią', 'Sob', 'Nie'] # PRZYWRÓCONA ZMIENNA
+            
             kolorowanie = alt.condition(
                 alt.datum['Etanol'] == 0,
                 alt.value('#27ae60'),
@@ -286,7 +288,6 @@ try:
                 full_range = pd.date_range(start=df_chart_line['Data'].min(), end=dzisiaj, freq='D')
                 df_chart_line = df_chart_line.set_index('Data').reindex(full_range, fill_value=0).reset_index().rename(columns={'index': 'Data'})
                 
-                # ZMIANA: Zastąpienie średniej kroczącej surową regresją liniową za pomocą NumPy
                 x_vals = np.arange(len(df_chart_line))
                 y_vals = df_chart_line['Czysty etanol [g]'].values
                 if len(x_vals) > 1:
@@ -303,7 +304,6 @@ try:
                     tooltip=[alt.Tooltip('Data:T', format='%d.%m.%Y', title='Data'), 'Alkohol', alt.Tooltip('Etanol:Q', title='Etanol (g)')]
                 )
                 
-                # ZMIANA: Stylizacja linii na czerwoną, przerywaną (wizualizacja regresji)
                 line = alt.Chart(df_chart_line).mark_line(color='#e74c3c', size=3, strokeDash=[5, 5]).encode(
                     x=alt.X('yearmonthdate(Data):O'), 
                     y=alt.Y('Trend:Q')
