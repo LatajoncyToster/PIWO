@@ -55,7 +55,6 @@ try:
             nowy_alko = st.selectbox("Rodzaj trunku", ["Piwo", "Wódka", "Wódka kolorowa", "Wino", "Inne"])
             nowa_ilosc = st.number_input("Ilość [ml]", min_value=0, step=50, value=500)
             nowa_moc = st.number_input("Moc [%]", min_value=0.0, step=0.1, value=5.0)
-            # ZMIANA: Uproszczona etykieta zgodnie z wytycznymi
             nowy_opis = st.text_input("Opis", value="")
             
             submit_button = st.form_submit_button("Dodaj trunek")
@@ -325,15 +324,17 @@ try:
 
         st.divider()
         st.subheader("Analiza Historyczna")
-        # ZMIANA: Dodanie piątej zakładki dla ciągów picia
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["Rozkład Tygodniowy", "Podsumowanie Miesięcy", "Top 3: Spożycie", "Top 3: Przerwy", "Top 3: Ciągi picia"])
         
+        # DEFINICJA FUNKCJI DEKLINACYJNEJ DLA WSZYSTKICH TABÓW
         def odmiana(n, f1, f2, f3):
             if n == 1: return f"{n} {f1}"
             if 10 < n % 100 < 15: return f"{n} {f3}"
             if n % 10 in [2, 3, 4]: return f"{n} {f2}"
             return f"{n} {f3}"
             
+        # ZMIANA: Zmiana etykiety zakładki piątej na "Ciągi"
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["Rozkład Tygodniowy", "Podsumowanie Miesięcy", "Top 3: Spożycie", "Top 3: Przerwy", "Ciągi"])
+        
         with tab1:
             df_dni = df.rename(columns={'Czysty etanol [g]': 'Etanol'})
             st.altair_chart(alt.Chart(df_dni.groupby('Dzień tygodnia')['Etanol'].mean().round(1).reset_index()).mark_bar(color='#9b59b6').encode(
@@ -358,18 +359,14 @@ try:
             df_p = df.groupby(['Data', 'Dzień tygodnia'])['Czysty etanol [g]'].sum().reset_index()
             df_p = df_p.sort_values(by='Czysty etanol [g]', ascending=False).head(3)
             
-            for i, (_, r) in enumerate(df_p.iterrows()):
+            for i, (_) r in enumerate(df_p.iterrows()):
                 g = round(r['Czysty etanol [g]'], 1)
-                
                 ilosc_piw = int(round(g/19.725, 0))
-                ilosc_shotow = int(round(g/12.624, 0))
-                litry_wodki = round(g/315.6, 2)
-                
                 txt_piwa = odmiana(ilosc_piw, "piwo", "piwa", "piw")
-                txt_shoty = odmiana(ilosc_shotow, "shot", "shoty", "shotów")
                 
+                # ZMIANA: Redukcja linii wyjściowej wyłącznie do wskazania piw (usunięto shoty i litry)
                 st.write(f"**{i+1}. {r['Data'].strftime('%d.%m.%Y')} ({r['Dzień tygodnia']})**")
-                st.write(f"Etanol: {g}g | {txt_piwa} | {txt_shoty} | {litry_wodki}l wódki")
+                st.write(f"Etanol: {g}g | {txt_piwa}")
                 st.write("---")
 
         with tab4:
@@ -387,11 +384,14 @@ try:
                 st.write(f"**{i+1}. {g['d']} dni** ({g['ok']})")
                 st.write("---")
 
-        # ZMIANA: Implementacja algorytmu wykrywania i sortowania ciągów dni z alkoholem z rzędu
         with tab5:
             u_d_drink = df['Data'].dt.normalize().drop_duplicates().sort_values().reset_index(drop=True)
             drinking_streaks = []
             if not u_d_drink.empty:
+                # Mapowanie sum dobowych etanolu na potrzeby wyliczenia średniej ciągu
+                df_daily_etanol = df.groupby('Data')['Czysty etanol [g]'].sum().reset_index()
+                etanol_map = dict(zip(df_daily_etanol['Data'], df_daily_etanol['Czysty etanol [g]']))
+                
                 curr_streak = [u_d_drink.iloc[0]]
                 for i in range(1, len(u_d_drink)):
                     if (u_d_drink.iloc[i] - u_d_drink.iloc[i-1]).days == 1:
@@ -401,14 +401,24 @@ try:
                         curr_streak = [u_d_drink.iloc[i]]
                 drinking_streaks.append(curr_streak)
                 
-                streak_gaps = [{
-                    'd': len(s), 
-                    'ok': f"{s[0].strftime('%d.%m')} - {s[-1].strftime('%d.%m')}" if len(s) > 1 else f"{s[0].strftime('%d.%m')}"
-                } for s in drinking_streaks]
+                streak_gaps = []
+                for s in drinking_streaks:
+                    total_s_etanol = sum(etanol_map.get(date, 0) for date in s)
+                    avg_s_etanol = total_s_etanol / len(s)
+                    avg_s_beers = avg_s_etanol / 19.725
+                    
+                    streak_gaps.append({
+                        'd': len(s), 
+                        'ok': f"{s[0].strftime('%d.%m')} - {s[-1].strftime('%d.%m')}" if len(s) > 1 else f"{s[0].strftime('%d.%m')}",
+                        'avg_g': round(avg_s_etanol, 1),
+                        'avg_p': round(avg_s_beers, 1)
+                    })
                 
+                # ZMIANA: Dodano wyliczenie i renderowanie średniej ilości gramów oraz piw na dzień ciągu
                 for i, g in enumerate(sorted(streak_gaps, key=lambda x: x['d'], reverse=True)[:3]):
                     txt_dni = odmiana(g['d'], "dzień", "dni", "dni")
                     st.write(f"**{i+1}. {txt_dni}** ({g['ok']})")
+                    st.write(f"Średnio na dzień: {g['avg_g']}g etanolu | {g['avg_p']} piwa")
                     st.write("---")
             else:
                 st.info("Brak danych.")
