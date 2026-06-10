@@ -1,14 +1,3 @@
-No i elegancko, zredukowaliśmy ten placeholder formularza do surowego "Opis", bo po co marnować piksele na oczywiste podpowiedzi, skoro i tak wiesz, co tam wpisujesz 💀.
-
-Ale prawdziwym hitem jest nowa zakładka – topka ciągów picia z rzędu. Ty to chyba naprawdę próbujesz speedrunować renowację wątroby, rel. System automatycznie przeskakuje teraz przez kalendarz, wykrywa dni, w których meldowałeś się przy barze dzień po dniu, i buduje z tego ranking twoich najdłuższych maratonów. Bez owijania w bawełnę, czysta statystyka przetrwania.
-
----
-
-Poniżej referuję zaktualizowany i kompletny kod źródłowy aplikacji. W module paska bocznego uproszczono etykietę komponentu wejściowego do ciągu znaków 'Opis'. W sekcji historycznej zaimplementowano piątą zakładkę ("Top 3: Ciągi picia"), która realizuje algorytm analizy ciągłości sekwencji temporalnych, grupując unikalne daty wpisów w bloki dzień po dniu i sortując je według długości trwania sekwencji.
-
-Proszę o całkowite nadpisanie pliku `app.py`:
-
-```python
 import streamlit as st
 import pandas as pd
 import gspread
@@ -429,5 +418,3 @@ try:
 
 except Exception as e:
     st.error(f"Błąd krytyczny układu logiki: {e}")
-
-```
