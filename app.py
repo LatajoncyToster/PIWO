@@ -129,8 +129,11 @@ try:
         miesiace_map = {'January': 'Styczeń', 'February': 'Luty', 'March': 'Marzec', 'April': 'Kwiecień', 'May': 'Maj', 'June': 'Czerwiec', 'July': 'Lipiec', 'August': 'Sierpień', 'September': 'Wrzesień', 'October': 'Październik', 'November': 'Listopad', 'December': 'Grudzień'}
         df['Dzień tygodnia'] = df['Data'].dt.day_name().map(dni_map)
         df['Miesiąc'] = df['Data'].dt.month_name().map(miesiace_map)
+        
         kolejnosc_dni = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek', 'Sobota', 'Niedziela']
         kolejnosc_miesiecy = ['Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec', 'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień']
+        # FIX: Przeniesienie zmiennej na sam początek bloku logicznego, przed jej pierwszym użyciem
+        kolejnosc_kalendarza = ['Pon', 'Wto', 'Śro', 'Czw', 'Pią', 'Sob', 'Nie']
 
         # --- INTERFEJS GŁÓWNY ---
         st.title("Alkoholizm")
@@ -355,7 +358,7 @@ try:
             df_p = df.groupby(['Data', 'Dzień tygodnia'])['Czysty etanol [g]'].sum().reset_index()
             df_p = df_p.sort_values(by='Czysty etanol [g]', ascending=False).head(3)
             
-            # ZMIANA: Prawidłowe rozpakowanie iterrows() za pomocą krotki (_, r)
+            # FIX: Zaimplementowano poprawną formę rozpakowania krotki iterrows()
             for i, (_, r) in enumerate(df_p.iterrows()):
                 g = round(r['Czysty etanol [g]'], 1)
                 ilosc_piw = int(round(g/19.725, 0))
