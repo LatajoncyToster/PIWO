@@ -55,6 +55,8 @@ try:
             nowy_alko = st.selectbox("Rodzaj trunku", ["Piwo", "Wódka", "Wódka kolorowa", "Wino", "Inne"])
             nowa_ilosc = st.number_input("Ilość [ml]", min_value=0, step=50, value=500)
             nowa_moc = st.number_input("Moc [%]", min_value=0.0, step=0.1, value=5.0)
+            # ZMIANA: Dodanie pola tekstowego na opis/notatkę
+            nowy_opis = st.text_input("Opis (np. marka, miejsce)", value="")
             
             submit_button = st.form_submit_button("Dodaj trunek")
             
@@ -66,7 +68,8 @@ try:
                 nowy_czas = datetime.datetime.now(strefa_pl).strftime('%H:%M') 
                 
                 try:
-                    sheet.append_row([data_str, skrot_alko, float(nowa_ilosc), float(nowa_moc), nowy_czas], value_input_option='RAW')
+                    # ZMIANA: Przekazanie nowego pola 'nowy_opis' jako szósty element tablicy
+                    sheet.append_row([data_str, skrot_alko, float(nowa_ilosc), float(nowa_moc), nowy_czas, nowy_opis], value_input_option='RAW')
                     st.success("Wpis dodany pomyślnie.")
                     fetch_data.clear() 
                     st.rerun() 
@@ -113,7 +116,13 @@ try:
         if 'Godz.' not in df.columns: 
             df['Godz.'] = '--:--'
         else: 
-            df['Godz.'] = df['Godz.'].fillna('--:--').replace('', '--:--').astype(str)
+            df['Godz'] = df['Godz.'].fillna('--:--').replace('', '--:--').astype(str)
+            
+        # ZMIANA: Obsługa kompatybilności wstecznej dla kolumny Opis (wypełnienie starych rekordów pustym tekstem)
+        if 'Opis' not in df.columns:
+            df['Opis'] = ''
+        else:
+            df['Opis'] = df['Opis'].fillna('').astype(str)
         
         mapowanie = {'vk': 'Wódka kolorowa', 'p': 'Piwo', 'v': 'Wódka', 'w': 'Wino', 'i': 'Inne'}
         df['Alkohol'] = df['Alkohol'].replace(mapowanie)
@@ -158,8 +167,10 @@ try:
             st.subheader("Ostatnie wpisy")
             df_disp = df.copy()
             df_disp['Data_str'] = df_disp['Data'].dt.strftime('%d.%m.%Y')
-            df_final = df_disp[['Dzień tygodnia', 'Data_str', 'Godz.', 'Alkohol', 'Ilość [ml]', 'Moc [%]', 'Czysty etanol [g]']].iloc[::-1].copy()
-            df_final.columns = ['Dzień tygodnia', 'Data', 'Godz.', 'Alkohol', 'Ilość [ml]', 'Moc [%]', 'Czysty etanol [g]']
+            
+            # ZMIANA: Wstrzyknięcie kolumny 'Opis' do widoku tabeli głównej
+            df_final = df_disp[['Dzień tygodnia', 'Data_str', 'Godz.', 'Alkohol', 'Opis', 'Ilość [ml]', 'Moc [%]', 'Czysty etanol [g]']].iloc[::-1].copy()
+            df_final.columns = ['Dzień tygodnia', 'Data', 'Godz.', 'Alkohol', 'Opis', 'Ilość [ml]', 'Moc [%]', 'Czysty etanol [g]']
             
             def highlight_dates(data):
                 mask = data['Data'].factorize()[0] % 2 == 0
@@ -288,7 +299,6 @@ try:
                 full_range = pd.date_range(start=df_chart_line['Data'].min(), end=dzisiaj, freq='D')
                 df_chart_line = df_chart_line.set_index('Data').reindex(full_range, fill_value=0).reset_index().rename(columns={'index': 'Data'})
                 
-                # ZMIANA: Implementacja wygładzonej średniej wykładniczej (EMA) zamiast surowej regresji liniowej
                 df_chart_line['Trend'] = df_chart_line['Czysty etanol [g]'].ewm(span=5, adjust=False).mean()
 
                 bars = alt.Chart(df_chart_bars).mark_bar(size=15).encode(
@@ -298,7 +308,6 @@ try:
                     tooltip=[alt.Tooltip('Data:T', format='%d.%m.%Y', title='Data'), 'Alkohol', alt.Tooltip('Etanol:Q', title='Etanol (g)')]
                 )
                 
-                # ZMIANA: Powrót do gładkiej, ciągłej linii interpolowanej w estetycznym kolorze
                 line = alt.Chart(df_chart_line).mark_line(color='#3498db', size=3, interpolate='monotone').encode(
                     x=alt.X('yearmonthdate(Data):O'), 
                     y=alt.Y('Trend:Q')
