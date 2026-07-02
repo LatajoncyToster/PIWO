@@ -225,6 +225,7 @@ try:
             st.altair_chart(heatmap + text, use_container_width=True)
 
         st.divider()
+        # ZMIANA: Usunięto subheader Tygodnie i dodano nowy Panel Główny z przełącznikiem
         st.subheader("Panel Główny")
         miesiac_temu = dzisiaj - pd.Timedelta(days=30)
         dwa_miesiace_temu = dzisiaj - pd.Timedelta(days=60)
@@ -255,8 +256,9 @@ try:
             
             st.divider()
             
+            # ZMIANA: Implementacja dynamicznego wyboru widoku trendu
             widok_wykresu = st.radio("Zmień widok trendu:", ["Dzienny (ostatnie 30 dni)", "Tygodniowy (cała historia)"], horizontal=True)
-            st.write("")
+            st.write("") # Odstęp
             
             col1, col2 = st.columns([2, 1])
             kolory_alko = alt.Scale(domain=['Piwo', 'Wódka kolorowa', 'Wódka', 'Wino', 'Inne'], range=['#f1c40f', '#e84393', '#ffffff', '#e74c3c', '#95a5a6'])
@@ -264,16 +266,13 @@ try:
             with col1:
                 st.markdown("**Trend spożycia**")
                 if widok_wykresu == "Dzienny (ostatnie 30 dni)":
-                    # ZMIANA: Twardy zero-padding dla ostatnich 30 dni
-                    full_range_dni = pd.date_range(start=miesiac_temu, end=dzisiaj, freq='D')
                     df_chart_bars = df_miesiac.groupby(['Data', 'Alkohol'])['Czysty etanol [g]'].sum().reset_index()
                     df_chart_bars = df_chart_bars.rename(columns={'Czysty etanol [g]': 'Etanol'})
                     
-                    empty_days = pd.DataFrame({'Data': full_range_dni, 'Alkohol': 'Piwo', 'Etanol': 0})
-                    df_chart_bars = pd.concat([df_chart_bars, empty_days]).groupby(['Data', 'Alkohol'])['Etanol'].sum().reset_index()
-                    
-                    df_chart_line = df_chart_bars.groupby('Data')['Etanol'].sum().reset_index()
-                    df_chart_line['Trend'] = df_chart_line['Etanol'].ewm(span=5, adjust=False).mean()
+                    df_chart_line = df_miesiac.groupby('Data')['Czysty etanol [g]'].sum().reset_index()
+                    full_range = pd.date_range(start=df_chart_line['Data'].min(), end=dzisiaj, freq='D')
+                    df_chart_line = df_chart_line.set_index('Data').reindex(full_range, fill_value=0).reset_index().rename(columns={'index': 'Data'})
+                    df_chart_line['Trend'] = df_chart_line['Czysty etanol [g]'].ewm(span=5, adjust=False).mean()
 
                     bars = alt.Chart(df_chart_bars).mark_bar(size=15).encode(
                         x=alt.X('yearmonthdate(Data):O', title='Data', axis=alt.Axis(format='%d.%m', labelAngle=-90)),
@@ -291,26 +290,17 @@ try:
                 else:
                     df_tyg = df.copy()
                     df_tyg['Tydzień'] = df_tyg['Data'].dt.normalize() - pd.to_timedelta(df_tyg['Data'].dt.dayofweek, unit='D')
-                    
-                    # ZMIANA: Twardy zero-padding dla 52 tygodni
-                    koniec_poniedzialek = (dzisiaj - pd.to_timedelta(dzisiaj.dayofweek, unit='D')).normalize()
-                    start_52_tyg = koniec_poniedzialek - pd.Timedelta(weeks=51)
-                    
-                    if not df_tyg.empty:
-                        start_range = min(df_tyg['Tydzień'].min(), start_52_tyg)
-                    else:
-                        start_range = start_52_tyg
-                        
-                    full_range_tyg = pd.date_range(start=start_range, end=koniec_poniedzialek, freq='7D')
-                    
                     df_chart_bars = df_tyg.groupby(['Tydzień', 'Alkohol'])['Czysty etanol [g]'].sum().reset_index()
                     df_chart_bars = df_chart_bars.rename(columns={'Czysty etanol [g]': 'Etanol'})
                     
-                    empty_weeks = pd.DataFrame({'Tydzień': full_range_tyg, 'Alkohol': 'Piwo', 'Etanol': 0})
-                    df_chart_bars = pd.concat([df_chart_bars, empty_weeks]).groupby(['Tydzień', 'Alkohol'])['Etanol'].sum().reset_index()
-                    
-                    df_chart_line = df_chart_bars.groupby('Tydzień')['Etanol'].sum().reset_index()
-                    df_chart_line['Trend'] = df_chart_line['Etanol'].ewm(span=3, adjust=False).mean()
+                    df_chart_line = df_tyg.groupby('Tydzień')['Czysty etanol [g]'].sum().reset_index()
+                    if not df_chart_line.empty:
+                        koniec_poniedzialek = (dzisiaj - pd.to_timedelta(dzisiaj.dayofweek, unit='D')).normalize()
+                        full_range = pd.date_range(start=df_chart_line['Tydzień'].min(), end=koniec_poniedzialek, freq='7D')
+                        df_chart_line = df_chart_line.set_index('Tydzień').reindex(full_range, fill_value=0).reset_index().rename(columns={'index': 'Tydzień'})
+                        df_chart_line['Trend'] = df_chart_line['Czysty etanol [g]'].ewm(span=3, adjust=False).mean()
+                    else:
+                        df_chart_line['Trend'] = pd.Series(dtype=float)
 
                     bars = alt.Chart(df_chart_bars).mark_bar(size=20).encode(
                         x=alt.X('yearmonthdate(Tydzień):O', title='Tydzień (od poniedziałku)', axis=alt.Axis(format='%d.%m', labelAngle=-90)),
@@ -327,6 +317,7 @@ try:
                 
             with col2:
                 st.markdown("**Struktura spożycia**")
+                # ZMIANA: Wykres kołowy dostosowuje się do wybranego przedziału czasowego
                 if widok_wykresu == "Dzienny (ostatnie 30 dni)":
                     df_donut = df_miesiac.rename(columns={'Czysty etanol [g]': 'Etanol'})
                 else:
