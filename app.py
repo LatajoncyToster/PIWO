@@ -124,7 +124,6 @@ try:
         mapowanie = {'vk': 'Wódka kolorowa', 'p': 'Piwo', 'v': 'Wódka', 'w': 'Wino', 'i': 'Inne'}
         df['Alkohol'] = df['Alkohol'].replace(mapowanie)
         
-        # ZMIANA: Twarda weryfikacja dat - wymuszenie NaT dla pustych wartości, a następnie ich całkowite usunięcie
         df['Data'] = pd.to_datetime(df['Data'], format='%d.%m.%Y', errors='coerce')
         df = df.dropna(subset=['Data']).copy()
         
@@ -295,12 +294,12 @@ try:
                     df_tyg['Tydzień'] = df_tyg['Data'].dt.normalize() - pd.to_timedelta(df_tyg['Data'].dt.dayofweek, unit='D')
                     
                     koniec_poniedzialek = (dzisiaj - pd.to_timedelta(dzisiaj.dayofweek, unit='D')).normalize()
-                    start_52_tyg = koniec_poniedzialek - pd.Timedelta(weeks=51)
                     
+                    # ZMIANA: Skrypt pobiera najstarszy zdefiniowany wpis w bazie, zamiast wymuszać cofanie o równy rok
                     if not df_tyg.empty:
-                        start_range = min(df_tyg['Tydzień'].min(), start_52_tyg)
+                        start_range = df_tyg['Tydzień'].min()
                     else:
-                        start_range = start_52_tyg
+                        start_range = koniec_poniedzialek - pd.Timedelta(weeks=4)
                         
                     full_range_tyg = pd.date_range(start=start_range, end=koniec_poniedzialek, freq='7D')
                     
@@ -340,7 +339,7 @@ try:
                 ).properties(height=350)
                 st.altair_chart(donut, use_container_width=True)
         else:
-            st.info("Brak danych z ostatnich 30 dni w rejestrze.")
+            st.info("Brak danych w rejestrze.")
 
         st.divider()
         st.subheader("Analiza Historyczna")
