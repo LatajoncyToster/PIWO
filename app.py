@@ -205,12 +205,26 @@ try:
             df_k['Pełny_dzień'] = df_k['Data'].dt.dayofweek.map(pelne_nazwy)
             df_k['Dzień_miesiąca'] = df_k['Data'].dt.day.astype(str)
             df_k['Rząd_tygodnia'] = df_k['Data'].apply(lambda d: (d.day - 1 + d.replace(day=1).weekday()) // 7)
+
+            # Ekstrakcja historycznego maksimum z pełnego zbioru danych
+            historyczny_max = df.groupby('Data')['Czysty etanol [g]'].sum().max()
             
+            # Zabezpieczenie w przypadku braku danych lub zerowego maksimum
+            if pd.isna(historyczny_max) or historyczny_max == 0:
+                historyczny_max = 100
+                
+           # Definicja mapowania kolorów z gradientem i stałą skalą
             kolorowanie = alt.condition(
                 alt.datum['Etanol'] == 0,
-                alt.value('#27ae60'),
-                alt.Color('Etanol:Q', scale=alt.Scale(scheme='reds'), legend=alt.Legend(title="Etanol (g)"))
+                alt.value('#27ae60'), # Brak spożycia: Zielony
+                alt.Color('Etanol:Q', 
+                          scale=alt.Scale(
+                              domain=[0.1, historyczny_max / 2, historyczny_max], 
+                              range=['#f1c40f', '#e67e22', '#8b0000'] # Żółty -> Pomarańczowy -> Ciemnoczerwony
+                          ), 
+                          legend=alt.Legend(title="Etanol (g)"))
             )
+
             heatmap = alt.Chart(df_k).mark_rect(stroke='gray', strokeWidth=0.5, cornerRadius=3).encode(
                 x=alt.X('Nazwa_dnia:N', sort=kolejnosc_kalendarza, title=None, axis=alt.Axis(labelAngle=0)),
                 y=alt.Y('Rząd_tygodnia:O', title=None, axis=alt.Axis(labels=False, ticks=False)), 
