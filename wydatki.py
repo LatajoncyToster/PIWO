@@ -1,10 +1,10 @@
-import streamlit as st
 from datetime import datetime
+from zoneinfo import ZoneInfo
 import gspread
 from google.oauth2.service_account import Credentials
 
-st.set_page_config(page_title="Wydatki", page_icon="💸", layout="centered")
-st.title("💸 Szybki Wydatek")
+st.set_page_config(page_title="Wydatki", page_icon="", layout="centered")
+st.title("Wydatki")
 
 def get_google_sheet():
     scopes = [
@@ -42,7 +42,7 @@ with st.form("expense_form", clear_on_submit=True):
         if kwota > 0:
             try:
                 worksheet = get_google_sheet()
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                timestamp = datetime.now(ZoneInfo("Europe/Warsaw")).strftime("%Y-%m-%d %H:%M:%S")
                 
                 # Szybki strzał do API - dopisanie wiersza na dole
                 worksheet.append_row([timestamp, kwota, kategoria, notatka])
