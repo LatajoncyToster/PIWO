@@ -8,7 +8,7 @@ from google.oauth2.service_account import Credentials
 
 st.set_page_config(page_title="Wydatki", layout="centered")
 
-# --- WSTRZYKNIĘCIE CUSTOM CSS (Opcjonalne, dla lepszego wyglądu metryk) ---
+# --- WSTRZYKNIĘCIE CUSTOM CSS ---
 st.markdown("""
 <style>
     div[data-testid="metric-container"] {
@@ -61,12 +61,12 @@ with st.form("expense_form", clear_on_submit=True):
     col1, col2 = st.columns(2)
     with col1:
         kwota = st.number_input("Kwota (PLN)", min_value=0.0, step=1.0, format="%.2f")
-   with col2:
+    with col2:
         kategoria = st.selectbox("Kategoria", [
             "NA PÓŹNIEJ", "JEDZENIE", "NAPOJE", "ALKOHOL", "SNUSY", 
             "KOMUNIKACJA", "KAUCJA", "ROZRYWKA"
         ])
-
+    
     notatka = st.text_input("Notatka (opcjonalnie)")
     
     submitted = st.form_submit_button("Zapisz", use_container_width=True)
