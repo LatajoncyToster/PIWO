@@ -3,7 +3,7 @@ from zoneinfo import ZoneInfo
 import gspread
 from google.oauth2.service_account import Credentials
 
-st.set_page_config(page_title="Wydatki", page_icon="", layout="centered")
+st.set_page_config(page_title="Wydatki", page_icon="💲", layout="centered")
 st.title("Wydatki")
 
 def get_google_sheet():
