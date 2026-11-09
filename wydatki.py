@@ -191,10 +191,9 @@ if not df.empty and 'Kwota' in df.columns:
     if not df_wybrany_wydatki.empty:
         donut = alt.Chart(df_wybrany_wydatki.groupby('Kategoria')['Kwota'].sum().reset_index()).mark_arc(innerRadius=45).encode(
             theta='Kwota:Q', 
-            # Zmiana: Użycie podpiętej palety kolorów dla struktury (donut)
-            color=alt.Color('Kategoria:N', scale=PALETA_KATEGORII, legend=alt.Legend(orient="bottom", title=None)), 
+            color=alt.Color('Kategoria:N', scale=PALETA_KATEGORII, legend=alt.Legend(orient="bottom", title=None, columns=2)), 
             tooltip=['Kategoria', alt.Tooltip('Kwota:Q', format='.2f', title='PLN')]
-        ).properties(height=300)
+        ).properties(height=380)
         st.altair_chart(donut, use_container_width=True)
     else:
         st.info("Brak wydatków w wybranym miesiącu.")
@@ -210,19 +209,19 @@ if not df.empty and 'Kwota' in df.columns:
         df_trend['Okres'] = df_trend['Data_Tylko']
         x_format = '%d.%m'
         x_title = 'Data'
-        wygładzanie_span = 14  # Wygładzenie na 14 dni zamiast 3
+        wygładzanie_span = 14
     elif widok_wykresu == "Tygodniowy (cała historia)":
         df_trend = df.copy()
         df_trend['Okres'] = df_trend['Data_Tylko'] - pd.to_timedelta(df_trend['Data_Tylko'].dt.dayofweek, unit='D')
         x_format = '%d.%m.%Y'
         x_title = 'Tydzień (od poniedziałku)'
-        wygładzanie_span = 4  # Średnia z 4 ostatnich tygodni (około miesiąc)
+        wygładzanie_span = 4
     else:
         df_trend = df.copy()
         df_trend['Okres'] = df_trend['Data_Tylko'] - pd.to_timedelta(df_trend['Data_Tylko'].dt.day - 1, unit='D')
         x_format = '%m.%Y'
         x_title = 'Miesiąc'
-        wygładzanie_span = 3  # Średnia z kwartału
+        wygładzanie_span = 3
 
     if not df_trend.empty:
         df_cf = df_trend.copy()
@@ -240,12 +239,11 @@ if not df.empty and 'Kwota' in df.columns:
             empty_kat = pd.DataFrame({'Okres': full_range, 'Kategoria': 'INNE', 'Kwota': 0})
             df_kat_grouped = pd.concat([df_kat_grouped, empty_kat]).groupby(['Okres', 'Kategoria'])['Kwota'].sum().reset_index()
 
-        # WYKRES 1: Cashflow
+        # WYKRES 1: Cashflow (usunięto xOffset)
         st.write("")
         st.markdown("**Cashflow (Wpływy vs Wydatki)**")
-        bars_cf = alt.Chart(df_cf_grouped).mark_bar().encode(
+        bars_cf = alt.Chart(df_cf_grouped).mark_bar(size=12).encode(
             x=alt.X('yearmonthdate(Okres):O', title=x_title, axis=alt.Axis(format=x_format, labelAngle=-90)),
-            xOffset='Typ:N',
             y=alt.Y('Wartość:Q', title='PLN'),
             color=alt.Color('Typ:N', scale=alt.Scale(domain=['Wpływ', 'Wydatek'], range=['#2ecc71', '#e74c3c']), legend=alt.Legend(title=None, orient="bottom")),
             tooltip=[alt.Tooltip('Okres:T', format=x_format, title='Okres'), alt.Tooltip('Typ:N', title='Rodzaj'), alt.Tooltip('Wartość:Q', title='PLN', format='.2f')]
@@ -259,19 +257,17 @@ if not df.empty and 'Kwota' in df.columns:
             bars_kat = alt.Chart(df_kat_grouped).mark_bar().encode(
                 x=alt.X('yearmonthdate(Okres):O', title=x_title, axis=alt.Axis(format=x_format, labelAngle=-90)),
                 y=alt.Y('Kwota:Q', title='PLN'),
-                # Zmiana: Podpięcie globalnej palety kolorów pod wykres ze słupkami
-                color=alt.Color('Kategoria:N', scale=PALETA_KATEGORII, legend=alt.Legend(title=None, orient="bottom")),
+                color=alt.Color('Kategoria:N', scale=PALETA_KATEGORII, legend=alt.Legend(title=None, orient="bottom", columns=2)),
                 tooltip=[alt.Tooltip('Okres:T', format=x_format, title='Okres'), alt.Tooltip('Kategoria:N', title='Kategoria'), alt.Tooltip('Kwota:Q', title='PLN', format='.2f')]
             )
             
             df_line = df_kat_grouped.groupby('Okres')['Kwota'].sum().reset_index()
-            # Zmiana: wygładzona zmienna "wygładzanie_span" (14 dni zamiast skaczącego 3)
             df_line['Trend'] = df_line['Kwota'].ewm(span=wygładzanie_span, adjust=False).mean()
             line_kat = alt.Chart(df_line).mark_line(color='#3498db', size=3, interpolate='monotone').encode(
                 x=alt.X('yearmonthdate(Okres):O'),
                 y=alt.Y('Trend:Q')
             )
-            st.altair_chart(bars_kat + line_kat, use_container_width=True)
+            st.altair_chart((bars_kat + line_kat).properties(height=380), use_container_width=True)
         else:
             st.info("Brak wydatków w tym widoku.")
     else:
