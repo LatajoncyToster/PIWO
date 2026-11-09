@@ -181,54 +181,91 @@ if not df.empty and 'Kwota' in df.columns:
     m3.metric("Wydatki", f"{suma_wydatkow:.2f} PLN", f"{delta_wydatki:.2f} PLN m/m", delta_color="inverse")
     
     st.write("")
-    col_wykres1, col_wykres2 = st.columns([2, 1])
-    
-    with col_wykres1:
-        st.markdown("**Cashflow (Wpływy vs Wydatki)**")
-        full_range_dni = pd.date_range(start=aktywny_miesiac_start, end=aktywny_miesiac_koniec, freq='D')
-        
-        if not df_wybrany.empty:
-            df_wykres = df_wybrany.copy()
-            df_wykres['Wartość'] = df_wykres.apply(lambda x: x['Kwota'] if x['Typ'] == 'Wpływ' else -x['Kwota'], axis=1)
-            
-            df_chart_bars = df_wykres.groupby(['Data_Tylko', 'Typ'])['Wartość'].sum().reset_index()
-            
-            empty_days = pd.DataFrame({'Data_Tylko': full_range_dni, 'Typ': 'Wpływ', 'Wartość': 0})
-            df_chart_bars = pd.concat([df_chart_bars, empty_days]).groupby(['Data_Tylko', 'Typ'])['Wartość'].sum().reset_index()
-            
-            domain = ['Wpływ', 'Wydatek']
-            range_colors = ['#2ecc71', '#e74c3c']
+    st.markdown("**Struktura wydatków (wybrany miesiąc)**")
+    if not df_wybrany_wydatki.empty:
+        donut = alt.Chart(df_wybrany_wydatki.groupby('Kategoria')['Kwota'].sum().reset_index()).mark_arc(innerRadius=45).encode(
+            theta='Kwota:Q', 
+            color=alt.Color('Kategoria:N', legend=alt.Legend(orient="bottom", title=None)), 
+            tooltip=['Kategoria', alt.Tooltip('Kwota:Q', format='.2f', title='PLN')]
+        ).properties(height=300)
+        st.altair_chart(donut, use_container_width=True)
+    else:
+        st.info("Brak wydatków w wybranym miesiącu.")
 
-            bars = alt.Chart(df_chart_bars).mark_bar(size=12).encode(
-                x=alt.X('yearmonthdate(Data_Tylko):O', title='Data', axis=alt.Axis(format='%d.%m', labelAngle=-90)),
-                y=alt.Y('Wartość:Q', title='PLN'),
-                color=alt.Color('Typ:N', scale=alt.Scale(domain=domain, range=range_colors), legend=alt.Legend(title=None, orient="bottom")),
-                tooltip=[
-                    alt.Tooltip('Data_Tylko:T', format='%d.%m.%Y', title='Data'),
-                    alt.Tooltip('Typ:N', title='Rodzaj'),
-                    alt.Tooltip('Wartość:Q', title='PLN', format='.2f')
-                ]
-            )
-            st.altair_chart(bars, use_container_width=True)
-        else:
-            empty_days = pd.DataFrame({'Data_Tylko': full_range_dni, 'Wartość': 0})
-            bars = alt.Chart(empty_days).mark_bar(size=12).encode(
-                x=alt.X('yearmonthdate(Data_Tylko):O', title='Data', axis=alt.Axis(format='%d.%m', labelAngle=-90)),
-                y=alt.Y('Wartość:Q', title='PLN')
-            )
-            st.altair_chart(bars, use_container_width=True)
+    # --- NOWA SEKCJA: TRENDY ---
+    st.divider()
+    st.subheader("Trendy w czasie")
+    widok_wykresu = st.radio("Zmień zakres czasu:", ["Dzienny (ostatnie 30 dni)", "Tygodniowy (cała historia)", "Miesięczny (cała historia)"], horizontal=True)
+
+    if widok_wykresu == "Dzienny (ostatnie 30 dni)":
+        start_date = dzisiaj - pd.Timedelta(days=30)
+        df_trend = df[df['Data_Tylko'] >= start_date].copy()
+        df_trend['Okres'] = df_trend['Data_Tylko']
+        x_format = '%d.%m'
+        x_title = 'Data'
+    elif widok_wykresu == "Tygodniowy (cała historia)":
+        df_trend = df.copy()
+        df_trend['Okres'] = df_trend['Data_Tylko'] - pd.to_timedelta(df_trend['Data_Tylko'].dt.dayofweek, unit='D')
+        x_format = '%d.%m.%Y'
+        x_title = 'Tydzień (od poniedziałku)'
+    else:
+        df_trend = df.copy()
+        # Cofnięcie daty do 1. dnia miesiąca dla grupowania
+        df_trend['Okres'] = df_trend['Data_Tylko'] - pd.to_timedelta(df_trend['Data_Tylko'].dt.day - 1, unit='D')
+        x_format = '%m.%Y'
+        x_title = 'Miesiąc'
+
+    if not df_trend.empty:
+        df_cf = df_trend.copy()
+        df_cf['Wartość'] = df_cf.apply(lambda x: x['Kwota'] if x['Typ'] == 'Wpływ' else -x['Kwota'], axis=1)
+        df_cf_grouped = df_cf.groupby(['Okres', 'Typ'])['Wartość'].sum().reset_index()
+        
+        df_kat = df_trend[df_trend['Typ'] == 'Wydatek'].copy()
+        df_kat_grouped = df_kat.groupby(['Okres', 'Kategoria'])['Kwota'].sum().reset_index()
+
+        # Wypełnianie zerami pustych dni tylko dla wykresu 30-dniowego, by zachować ciągłość osi
+        if widok_wykresu == "Dzienny (ostatnie 30 dni)":
+            full_range = pd.date_range(start=start_date, end=dzisiaj, freq='D')
+            empty_cf = pd.DataFrame({'Okres': full_range, 'Typ': 'Wpływ', 'Wartość': 0})
+            df_cf_grouped = pd.concat([df_cf_grouped, empty_cf]).groupby(['Okres', 'Typ'])['Wartość'].sum().reset_index()
             
-    with col_wykres2:
-        st.markdown("**Struktura wydatków**")
-        if not df_wybrany_wydatki.empty:
-            donut = alt.Chart(df_wybrany_wydatki.groupby('Kategoria')['Kwota'].sum().reset_index()).mark_arc(innerRadius=45).encode(
-                theta='Kwota:Q', 
-                color=alt.Color('Kategoria:N', legend=alt.Legend(orient="bottom", title=None)), 
-                tooltip=['Kategoria', alt.Tooltip('Kwota:Q', format='.2f', title='PLN')]
-            ).properties(height=300)
-            st.altair_chart(donut, use_container_width=True)
+            empty_kat = pd.DataFrame({'Okres': full_range, 'Kategoria': 'INNE', 'Kwota': 0})
+            df_kat_grouped = pd.concat([df_kat_grouped, empty_kat]).groupby(['Okres', 'Kategoria'])['Kwota'].sum().reset_index()
+
+        # WYKRES 1: Cashflow
+        st.write("")
+        st.markdown("**Cashflow (Wpływy vs Wydatki)**")
+        bars_cf = alt.Chart(df_cf_grouped).mark_bar().encode(
+            x=alt.X('yearmonthdate(Okres):O', title=x_title, axis=alt.Axis(format=x_format, labelAngle=-90)),
+            xOffset='Typ:N',
+            y=alt.Y('Wartość:Q', title='PLN'),
+            color=alt.Color('Typ:N', scale=alt.Scale(domain=['Wpływ', 'Wydatek'], range=['#2ecc71', '#e74c3c']), legend=alt.Legend(title=None, orient="bottom")),
+            tooltip=[alt.Tooltip('Okres:T', format=x_format, title='Okres'), alt.Tooltip('Typ:N', title='Rodzaj'), alt.Tooltip('Wartość:Q', title='PLN', format='.2f')]
+        )
+        st.altair_chart(bars_cf, use_container_width=True)
+
+        # WYKRES 2: Struktura wydatków kolorami
+        st.write("")
+        st.markdown("**Struktura wydatków w czasie**")
+        if not df_kat_grouped.empty and df_kat_grouped['Kwota'].sum() > 0:
+            bars_kat = alt.Chart(df_kat_grouped).mark_bar().encode(
+                x=alt.X('yearmonthdate(Okres):O', title=x_title, axis=alt.Axis(format=x_format, labelAngle=-90)),
+                y=alt.Y('Kwota:Q', title='PLN'),
+                color=alt.Color('Kategoria:N', legend=alt.Legend(title=None, orient="bottom")),
+                tooltip=[alt.Tooltip('Okres:T', format=x_format, title='Okres'), alt.Tooltip('Kategoria:N', title='Kategoria'), alt.Tooltip('Kwota:Q', title='PLN', format='.2f')]
+            )
+            
+            df_line = df_kat_grouped.groupby('Okres')['Kwota'].sum().reset_index()
+            df_line['Trend'] = df_line['Kwota'].ewm(span=3, adjust=False).mean()
+            line_kat = alt.Chart(df_line).mark_line(color='#3498db', size=3, interpolate='monotone').encode(
+                x=alt.X('yearmonthdate(Okres):O'),
+                y=alt.Y('Trend:Q')
+            )
+            st.altair_chart(bars_kat + line_kat, use_container_width=True)
         else:
-            st.info("Brak wydatków w wybranym miesiącu.")
+            st.info("Brak wydatków w tym widoku.")
+    else:
+        st.info("Brak danych w historii.")
 
     st.divider()
     st.markdown("**Historia operacji**")
