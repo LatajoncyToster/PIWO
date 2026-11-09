@@ -5,6 +5,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 import gspread
 from google.oauth2.service_account import Credentials
+import re
 
 st.set_page_config(page_title="Finanse", layout="centered")
 
@@ -52,8 +53,25 @@ def fetch_data():
         st.error(f"Błąd pobierania danych: {e}")
         return pd.DataFrame()
 
+# --- MODUŁ PARSOWANIA KWOTY (KALKULATOR) ---
+def parsowanie_kwoty(wyrazenie):
+    if not wyrazenie:
+        return 0.0
+    # Czyszczenie: usuwa "=", spacje i zmienia przecinki na kropki
+    czyste = str(wyrazenie).replace(',', '.').replace(' ', '').lstrip('=')
+    
+    # Zabezpieczenie RegEx: puszcza tylko cyfry, operatory matematyczne i kropki/nawiasy
+    if not re.match(r'^[\d\+\-\*\/\.\(\)]+$', czyste):
+        return -1.0
+        
+    try:
+        # Ewaluacja równania z palca
+        wynik = float(eval(czyste))
+        return round(wynik, 2)
+    except Exception:
+        return -1.0
+
 # --- MODUŁ WPROWADZANIA DANYCH ---
-# Przełącznik wyrzucony nad formularz, żeby Streamlit mógł dynamicznie przeładować listę kategorii
 typ_transakcji = st.radio("Rodzaj operacji:", ["Wydatek", "Wpływ"], horizontal=True)
 
 with st.form("expense_form", clear_on_submit=True):
@@ -61,7 +79,8 @@ with st.form("expense_form", clear_on_submit=True):
     
     col1, col2 = st.columns(2)
     with col1:
-        kwota = st.number_input("Kwota (PLN)", min_value=0.0, step=1.0, format="%.2f")
+        # Zmieniono z number_input na text_input
+        kwota_input = st.text_input("Kwota (PLN)", placeholder="np. 9,99+2,30")
     with col2:
         if typ_transakcji == "Wydatek":
             lista_kategorii = ["NA PÓŹNIEJ", "JEDZENIE", "NAPOJE", "ALKOHOL", "SNUSY", "KOMUNIKACJA", "KAUCJA", "ROZRYWKA"]
@@ -75,6 +94,9 @@ with st.form("expense_form", clear_on_submit=True):
     submitted = st.form_submit_button("Zapisz w bazie", use_container_width=True)
     
     if submitted:
+        # Wywołanie parsera obliczającego równanie
+        kwota = parsowanie_kwoty(kwota_input)
+        
         if kwota > 0:
             try:
                 worksheet = get_google_sheet()
@@ -82,7 +104,6 @@ with st.form("expense_form", clear_on_submit=True):
                 obecny_czas = datetime.now(ZoneInfo("Europe/Warsaw")).time()
                 timestamp = datetime.combine(nowa_data, obecny_czas).strftime("%Y-%m-%d %H:%M:%S")
                 
-                # Dodajemy 5 argumentów do wiersza (Typ leci jako ostatni)
                 worksheet.append_row([timestamp, kwota, kategoria, notatka, typ_transakcji])
                 st.success(f"Dodano {typ_transakcji.lower()}: {kwota} PLN -> {kategoria}")
                 fetch_data.clear() 
@@ -90,19 +111,17 @@ with st.form("expense_form", clear_on_submit=True):
             except Exception as e:
                 st.error(f"Coś gruchnęło: {e}")
         else:
-            st.error("Wprowadź kwotę większą niż 0.")
+            st.error("Błąd. Wpisz poprawną kwotę lub równanie (np. 15.50 + 4,20).")
 
 # --- POBIERANIE I OBRÓBKA DANYCH DO STATYSTYK ---
 df = fetch_data()
 
 if not df.empty and 'Kwota' in df.columns:
-    # Czyszczenie i konwersja danych
     df['Kwota'] = df['Kwota'].astype(str).str.replace(',', '.').str.replace(' ', '').replace('', '0').astype(float)
     df['Data_Full'] = pd.to_datetime(df['Data'], errors='coerce')
     df['Data_Tylko'] = df['Data_Full'].dt.normalize()
     df = df.dropna(subset=['Data_Full']).copy()
     
-    # Łatanie starych wpisów - jeśli brakuje kolumny 'Typ' lub jest pusta, traktuj jako Wydatek
     if 'Typ' not in df.columns:
         df['Typ'] = 'Wydatek'
     else:
@@ -136,14 +155,12 @@ if not df.empty and 'Kwota' in df.columns:
         if not df_miesiac.empty:
             full_range_dni = pd.date_range(start=miesiac_temu, end=dzisiaj, freq='D')
             
-            # Wektoryzacja wartości na plus i minus pod wykres
             df_miesiac['Cashflow'] = df_miesiac.apply(lambda x: x['Kwota'] if x['Typ'] == 'Wpływ' else -x['Kwota'], axis=1)
             df_chart_bars = df_miesiac.groupby('Data_Tylko')['Cashflow'].sum().reset_index()
             
             empty_days = pd.DataFrame({'Data_Tylko': full_range_dni, 'Cashflow': 0})
             df_chart_bars = pd.concat([df_chart_bars, empty_days]).groupby('Data_Tylko')['Cashflow'].sum().reset_index()
             
-            # Kolorowanie: zielony dla dni na plusie, czerwony dla dni na minusie
             kolor_warunek = alt.condition(
                 alt.datum.Cashflow > 0,
                 alt.value('#2ecc71'),  
@@ -184,7 +201,6 @@ st.divider()
 st.subheader("Szybkie akcje")
 col_btn1, col_btn2 = st.columns(2)
 
-# --- MODUŁ COFANIA (USUWANIE REKORDU) ---
 with col_btn1:
     if st.button("Cofnij (usuń ostatni wpis)", use_container_width=True):
         try:
@@ -201,7 +217,6 @@ with col_btn1:
         except Exception as e:
             st.error(f"Błąd przy usuwaniu: {e}")
 
-# --- MODUŁ ODŚWIEŻANIA APLIKACJI ---
 with col_btn2:
     if st.button("Odśwież aplikację", use_container_width=True):
         fetch_data.clear()
