@@ -57,15 +57,12 @@ def fetch_data():
 def parsowanie_kwoty(wyrazenie):
     if not wyrazenie:
         return 0.0
-    # Czyszczenie: usuwa "=", spacje i zmienia przecinki na kropki
     czyste = str(wyrazenie).replace(',', '.').replace(' ', '').lstrip('=')
     
-    # Zabezpieczenie RegEx: puszcza tylko cyfry, operatory matematyczne i kropki/nawiasy
     if not re.match(r'^[\d\+\-\*\/\.\(\)]+$', czyste):
         return -1.0
         
     try:
-        # Ewaluacja równania z palca
         wynik = float(eval(czyste))
         return round(wynik, 2)
     except Exception:
@@ -79,7 +76,6 @@ with st.form("expense_form", clear_on_submit=True):
     
     col1, col2 = st.columns(2)
     with col1:
-        # Zmieniono z number_input na text_input
         kwota_input = st.text_input("Kwota (PLN)", placeholder="np. 9,99+2,30")
     with col2:
         if typ_transakcji == "Wydatek":
@@ -100,7 +96,6 @@ with st.form("expense_form", clear_on_submit=True):
     submitted = st.form_submit_button("Zapisz w bazie", use_container_width=True)
     
     if submitted:
-        # Wywołanie parsera obliczającego równanie
         kwota = parsowanie_kwoty(kwota_input)
         
         if kwota > 0:
@@ -196,9 +191,8 @@ if not df.empty and 'Kwota' in df.columns:
         else:
             st.info("Brak wydatków do strukturyzacji.")
 
-   st.markdown("**Ostatnie 5 wpisów**")
+    st.markdown("**Ostatnie 5 wpisów**")
     
-    # Bezpieczne wybieranie kolumn: bierzemy tylko te, które faktycznie istnieją w dataframe
     dostepne_kolumny = [col for col in ['Data', 'Typ', 'Kategoria', 'Kwota', 'Notatka'] if col in df.columns]
     
     df_disp = df[dostepne_kolumny].iloc[::-1].head(5).copy()
