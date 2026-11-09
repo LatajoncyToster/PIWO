@@ -71,7 +71,8 @@ def parsowanie_kwoty(wyrazenie):
 # --- MAPOWANIE KOLORÓW KATEGORII ---
 PALETA_KATEGORII = alt.Scale(
     domain=["JEDZENIE", "NAPOJE", "ALKOHOL", "SNUSY", "ROZRYWKA", "KOMUNIKACJA", "KOSZTY STAŁE", "XTB", "INNE"],
-    range=["#e67e22", "#f1c40f", "#3498db", "#9b59b6", "#2ecc71", "#bdc3c7", "#7f8c8d", "#e74c3c", "#95a5a6"]
+    # Zmieniono szósty element z jasnego szarego (#bdc3c7) na brązowy (#8B4513)
+    range=["#e67e22", "#f1c40f", "#3498db", "#9b59b6", "#2ecc71", "#8B4513", "#7f8c8d", "#e74c3c", "#95a5a6"]
 )
 
 # --- MODUŁ WPROWADZANIA DANYCH ---
