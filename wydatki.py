@@ -22,7 +22,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Zmiana tytułu zgodnie z życzeniem
 st.title("Wydatki")
 
 # --- OPTYMALIZACJA: POŁĄCZENIE I CACHOWANIE DANYCH ---
@@ -132,7 +131,6 @@ if not df.empty and 'Kwota' in df.columns:
     st.divider()
     st.subheader("Analiza miesięczna")
 
-    # Inicjalizacja offsetu kalendarza w stanie sesji
     if 'miesiac_offset' not in st.session_state: 
         st.session_state.miesiac_offset = 0
 
@@ -146,7 +144,6 @@ if not df.empty and 'Kwota' in df.columns:
             st.session_state.miesiac_offset += 1
             st.rerun()
 
-    # Wyliczanie dat na podstawie offsetu
     dzisiaj = pd.Timestamp.now(tz=ZoneInfo('Europe/Warsaw')).normalize().tz_localize(None)
     pierwszy_dzien_obecnego = dzisiaj.replace(day=1)
     
@@ -160,7 +157,6 @@ if not df.empty and 'Kwota' in df.columns:
     with c2: 
         st.markdown(f"<h4 style='text-align: center; margin-top: 0;'>{nazwa_miesiaca}</h4>", unsafe_allow_html=True)
     
-    # Filtrowanie Danych po wybranym miesiącu
     df_wybrany = df[(df['Data_Tylko'] >= aktywny_miesiac_start) & (df['Data_Tylko'] <= aktywny_miesiac_koniec)].copy()
     df_poprzedni = df[(df['Data_Tylko'] >= poprzedni_miesiac_start) & (df['Data_Tylko'] < aktywny_miesiac_start)].copy()
     
@@ -171,7 +167,6 @@ if not df.empty and 'Kwota' in df.columns:
     suma_wplywow = df_wybrany_wplywy['Kwota'].sum()
     bilans = suma_wplywow - suma_wydatkow
     
-    # Obliczanie delty względem poprzedniego miesiąca
     suma_wydatkow_poprz = df_poprzedni[df_poprzedni['Typ'] == 'Wydatek']['Kwota'].sum()
     suma_wplywow_poprz = df_poprzedni[df_poprzedni['Typ'] == 'Wpływ']['Kwota'].sum()
     bilans_poprz = suma_wplywow_poprz - suma_wydatkow_poprz
@@ -183,33 +178,27 @@ if not df.empty and 'Kwota' in df.columns:
     m1, m2, m3 = st.columns(3)
     m1.metric("Bilans Netto", f"{bilans:.2f} PLN", f"{delta_bilans:.2f} PLN m/m")
     m2.metric("Wpływy", f"{suma_wplywow:.2f} PLN", f"{delta_wplywy:.2f} PLN m/m")
-    # delta_color="inverse" sprawia, że wzrost wydatków jest czerwony, a spadek zielony
     m3.metric("Wydatki", f"{suma_wydatkow:.2f} PLN", f"{delta_wydatki:.2f} PLN m/m", delta_color="inverse")
     
     st.write("")
     col_wykres1, col_wykres2 = st.columns([2, 1])
     
-   with col_wykres1:
+    with col_wykres1:
         st.markdown("**Cashflow (Wpływy vs Wydatki)**")
         full_range_dni = pd.date_range(start=aktywny_miesiac_start, end=aktywny_miesiac_koniec, freq='D')
         
         if not df_wybrany.empty:
-            # Tworzymy kopię i nadajemy wydatkom wartość ujemną do wykresu
             df_wykres = df_wybrany.copy()
             df_wykres['Wartość'] = df_wykres.apply(lambda x: x['Kwota'] if x['Typ'] == 'Wpływ' else -x['Kwota'], axis=1)
             
-            # Grupowanie oddzielnie dla Typu (Wpływ/Wydatek) dla każdego dnia
             df_chart_bars = df_wykres.groupby(['Data_Tylko', 'Typ'])['Wartość'].sum().reset_index()
             
-            # Dodanie pustych dni, żeby zachować ciągłość osi X
             empty_days = pd.DataFrame({'Data_Tylko': full_range_dni, 'Typ': 'Wpływ', 'Wartość': 0})
             df_chart_bars = pd.concat([df_chart_bars, empty_days]).groupby(['Data_Tylko', 'Typ'])['Wartość'].sum().reset_index()
             
-            # Definiowanie sztywnych kolorów dla typów
             domain = ['Wpływ', 'Wydatek']
             range_colors = ['#2ecc71', '#e74c3c']
 
-            # Zmiana: używamy xOffset, żeby słupki stały obok siebie (grouped bar chart)
             bars = alt.Chart(df_chart_bars).mark_bar(size=8).encode(
                 x=alt.X('yearmonthdate(Data_Tylko):O', title='Data', axis=alt.Axis(format='%d.%m', labelAngle=-90)),
                 xOffset='Typ:N',
@@ -223,7 +212,6 @@ if not df.empty and 'Kwota' in df.columns:
             )
             st.altair_chart(bars, use_container_width=True)
         else:
-            # Pusta siatka, gdy brak danych
             empty_days = pd.DataFrame({'Data_Tylko': full_range_dni, 'Wartość': 0})
             bars = alt.Chart(empty_days).mark_bar(size=8).encode(
                 x=alt.X('yearmonthdate(Data_Tylko):O', title='Data', axis=alt.Axis(format='%d.%m', labelAngle=-90)),
@@ -248,7 +236,6 @@ if not df.empty and 'Kwota' in df.columns:
     
     dostepne_kolumny = [col for col in ['Data', 'Typ', 'Kategoria', 'Kwota', 'Notatka'] if col in df.columns]
     
-    # Wyświetlanie wszystkich wpisów, w przewijanym boksie z przypiętą wysokością 350px
     df_disp = df[dostepne_kolumny].iloc[::-1].copy()
     st.dataframe(df_disp.style.format({'Kwota': '{:.2f}'}), hide_index=True, use_container_width=True, height=350)
 
