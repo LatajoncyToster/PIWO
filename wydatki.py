@@ -86,7 +86,7 @@ with st.form("expense_form", clear_on_submit=True):
             lista_kategorii = [
                 "NA PÓŹNIEJ", "JEDZENIE", "NAPOJE", "ALKOHOL", "SNUSY", 
                 "KOMUNIKACJA", "ROZRYWKA", "KOSZTY STAŁE", 
-                "XTB", "PRACA", "INNE"
+                "XTB", "INNE"
             ]
         else:
             lista_kategorii = [
