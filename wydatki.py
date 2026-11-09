@@ -199,9 +199,8 @@ if not df.empty and 'Kwota' in df.columns:
             domain = ['Wpływ', 'Wydatek']
             range_colors = ['#2ecc71', '#e74c3c']
 
-            bars = alt.Chart(df_chart_bars).mark_bar(size=8).encode(
+            bars = alt.Chart(df_chart_bars).mark_bar(size=12).encode(
                 x=alt.X('yearmonthdate(Data_Tylko):O', title='Data', axis=alt.Axis(format='%d.%m', labelAngle=-90)),
-                xOffset='Typ:N',
                 y=alt.Y('Wartość:Q', title='PLN'),
                 color=alt.Color('Typ:N', scale=alt.Scale(domain=domain, range=range_colors), legend=alt.Legend(title=None, orient="bottom")),
                 tooltip=[
@@ -213,7 +212,7 @@ if not df.empty and 'Kwota' in df.columns:
             st.altair_chart(bars, use_container_width=True)
         else:
             empty_days = pd.DataFrame({'Data_Tylko': full_range_dni, 'Wartość': 0})
-            bars = alt.Chart(empty_days).mark_bar(size=8).encode(
+            bars = alt.Chart(empty_days).mark_bar(size=12).encode(
                 x=alt.X('yearmonthdate(Data_Tylko):O', title='Data', axis=alt.Axis(format='%d.%m', labelAngle=-90)),
                 y=alt.Y('Wartość:Q', title='PLN')
             )
