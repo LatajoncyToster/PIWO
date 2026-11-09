@@ -83,9 +83,15 @@ with st.form("expense_form", clear_on_submit=True):
         kwota_input = st.text_input("Kwota (PLN)", placeholder="np. 9,99+2,30")
     with col2:
         if typ_transakcji == "Wydatek":
-            lista_kategorii = ["NA PÓŹNIEJ", "JEDZENIE", "NAPOJE", "ALKOHOL", "SNUSY", "KOMUNIKACJA", "KAUCJA", "ROZRYWKA"]
+            lista_kategorii = [
+                "NA PÓŹNIEJ", "JEDZENIE", "NAPOJE", "ALKOHOL", "SNUSY", 
+                "KOMUNIKACJA", "KAUCJA", "ROZRYWKA", "KOSZTY STAŁE", 
+                "XTB", "PRACA", "INNE"
+            ]
         else:
-            lista_kategorii = ["WYPŁATA", "VINTED / OLX", "ZAROBKI INNE", "ZWROT KAUCJI"]
+            lista_kategorii = [
+                "WYPŁATA", "VINTED / OLX", "ZAROBKI INNE", "ZWROT KAUCJI", "INNE"
+            ]
             
         kategoria = st.selectbox("Kategoria", lista_kategorii)
     
