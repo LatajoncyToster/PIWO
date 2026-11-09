@@ -70,8 +70,8 @@ def parsowanie_kwoty(wyrazenie):
 
 # --- MAPOWANIE KOLORÓW KATEGORII ---
 PALETA_KATEGORII = alt.Scale(
-    domain=["JEDZENIE", "NAPOJE", "ALKOHOL", "SNUSY", "ROZRYWKA", "KOMUNIKACJA", "KOSZTY STAŁE", "XTB", "NA PÓŹNIEJ", "INNE"],
-    range=["#e67e22", "#f1c40f", "#3498db", "#9b59b6", "#2ecc71", "#bdc3c7", "#7f8c8d", "#e74c3c", "#ecf0f1", "#95a5a6"]
+    domain=["JEDZENIE", "NAPOJE", "ALKOHOL", "SNUSY", "ROZRYWKA", "KOMUNIKACJA", "KOSZTY STAŁE", "XTB", "INNE"],
+    range=["#e67e22", "#f1c40f", "#3498db", "#9b59b6", "#2ecc71", "#bdc3c7", "#7f8c8d", "#e74c3c", "#95a5a6"]
 )
 
 # --- MODUŁ WPROWADZANIA DANYCH ---
@@ -86,7 +86,7 @@ with st.form("expense_form", clear_on_submit=True):
     with col2:
         if typ_transakcji == "Wydatek":
             lista_kategorii = [
-                "NA PÓŹNIEJ", "JEDZENIE", "NAPOJE", "ALKOHOL", "SNUSY", 
+                "JEDZENIE", "NAPOJE", "ALKOHOL", "SNUSY", 
                 "KOMUNIKACJA", "ROZRYWKA", "KOSZTY STAŁE", 
                 "XTB", "INNE"
             ]
@@ -95,7 +95,7 @@ with st.form("expense_form", clear_on_submit=True):
                 "WYPŁATA", "VINTED / OLX", "ZAROBKI INNE", "ZWROT KAUCJI", "INNE"
             ]
             
-        kategoria = st.selectbox("Kategoria", lista_kategorii)
+        kategoria = st.selectbox("Kategoria", lista_kategorii, index=None, placeholder="Wybierz...")
     
     notatka = st.text_input("Notatka (opcjonalnie)")
     
@@ -104,7 +104,7 @@ with st.form("expense_form", clear_on_submit=True):
     if submitted:
         kwota = parsowanie_kwoty(kwota_input)
         
-        if kwota > 0:
+        if kwota > 0 and kategoria is not None:
             try:
                 worksheet = get_google_sheet()
                 
@@ -117,6 +117,8 @@ with st.form("expense_form", clear_on_submit=True):
                 st.rerun()
             except Exception as e:
                 st.error(f"Coś gruchnęło: {e}")
+        elif kategoria is None:
+            st.error("Błąd. Zanim zapiszesz, wybierz kategorię z listy.")
         else:
             st.error("Błąd. Wpisz poprawną kwotę lub równanie (np. 15.50 + 4,20).")
 
@@ -272,7 +274,6 @@ if not df.empty and 'Kwota' in df.columns:
     else:
         st.info("Brak danych w historii.")
 
-    # Obliczenia globalne potrzebne w obu poniższych sekcjach
     df_wydatki_wszystkie = df[df['Typ'] == 'Wydatek'].copy()
     liczba_miesiecy = df['Data_Tylko'].dt.to_period('M').nunique() if not df.empty else 1
 
@@ -317,7 +318,6 @@ if not df.empty and 'Kwota' in df.columns:
     df_poprzedni_wyd_copy = df_poprzedni[df_poprzedni['Typ'] == 'Wydatek'].copy()
     df_poprzedni_wyd_copy['Okres'] = 'Poprzedni miesiąc'
     
-    # Tworzenie DataFrame z historycznymi średnimi dla porównania
     if not df_wydatki_wszystkie.empty:
         df_srednia_porownanie = df_wydatki_wszystkie.groupby('Kategoria')['Kwota'].sum().reset_index()
         df_srednia_porownanie['Kwota'] = df_srednia_porownanie['Kwota'] / max(1, liczba_miesiecy)
@@ -330,13 +330,11 @@ if not df.empty and 'Kwota' in df.columns:
     if not df_porownanie.empty:
         df_porownanie_grouped = df_porownanie.groupby(['Okres', 'Kategoria'])['Kwota'].sum().reset_index()
         
-        # Sortowanie według wydatków obecnie wybranego miesiąca (od największych)
         sort_porownanie = df_wybrany_wyd_copy.groupby('Kategoria')['Kwota'].sum().sort_values(ascending=False).index.tolist()
         missing_cats = [c for c in df_porownanie_grouped['Kategoria'].unique() if c not in sort_porownanie]
         sort_porownanie.extend(missing_cats)
         
         okres_kolejnosc = ['Średnia historyczna', 'Poprzedni miesiąc', 'Wybrany miesiąc']
-        # Kolory: Jasny szary (Średnia), Ciemny szary (Poprzedni msc), Niebieski (Obecnie przeglądany msc)
         okres_kolory = ['#bdc3c7', '#7f8c8d', '#3498db']
         
         bars_compare = alt.Chart(df_porownanie_grouped).mark_bar(size=10).encode(
