@@ -189,36 +189,45 @@ if not df.empty and 'Kwota' in df.columns:
     st.write("")
     col_wykres1, col_wykres2 = st.columns([2, 1])
     
-    with col_wykres1:
+   with col_wykres1:
         st.markdown("**Cashflow (Wpływy vs Wydatki)**")
         full_range_dni = pd.date_range(start=aktywny_miesiac_start, end=aktywny_miesiac_koniec, freq='D')
         
         if not df_wybrany.empty:
-            df_wybrany['Cashflow'] = df_wybrany.apply(lambda x: x['Kwota'] if x['Typ'] == 'Wpływ' else -x['Kwota'], axis=1)
-            df_chart_bars = df_wybrany.groupby('Data_Tylko')['Cashflow'].sum().reset_index()
+            # Tworzymy kopię i nadajemy wydatkom wartość ujemną do wykresu
+            df_wykres = df_wybrany.copy()
+            df_wykres['Wartość'] = df_wykres.apply(lambda x: x['Kwota'] if x['Typ'] == 'Wpływ' else -x['Kwota'], axis=1)
             
-            empty_days = pd.DataFrame({'Data_Tylko': full_range_dni, 'Cashflow': 0})
-            df_chart_bars = pd.concat([df_chart_bars, empty_days]).groupby('Data_Tylko')['Cashflow'].sum().reset_index()
+            # Grupowanie oddzielnie dla Typu (Wpływ/Wydatek) dla każdego dnia
+            df_chart_bars = df_wykres.groupby(['Data_Tylko', 'Typ'])['Wartość'].sum().reset_index()
             
-            kolor_warunek = alt.condition(
-                alt.datum.Cashflow > 0,
-                alt.value('#2ecc71'),  
-                alt.value('#e74c3c')   
-            )
+            # Dodanie pustych dni, żeby zachować ciągłość osi X
+            empty_days = pd.DataFrame({'Data_Tylko': full_range_dni, 'Typ': 'Wpływ', 'Wartość': 0})
+            df_chart_bars = pd.concat([df_chart_bars, empty_days]).groupby(['Data_Tylko', 'Typ'])['Wartość'].sum().reset_index()
+            
+            # Definiowanie sztywnych kolorów dla typów
+            domain = ['Wpływ', 'Wydatek']
+            range_colors = ['#2ecc71', '#e74c3c']
 
-            bars = alt.Chart(df_chart_bars).mark_bar(size=12).encode(
+            # Zmiana: używamy xOffset, żeby słupki stały obok siebie (grouped bar chart)
+            bars = alt.Chart(df_chart_bars).mark_bar(size=8).encode(
                 x=alt.X('yearmonthdate(Data_Tylko):O', title='Data', axis=alt.Axis(format='%d.%m', labelAngle=-90)),
-                y=alt.Y('Cashflow:Q', title='PLN'),
-                color=kolor_warunek,
-                tooltip=[alt.Tooltip('Data_Tylko:T', format='%d.%m.%Y', title='Data'), alt.Tooltip('Cashflow:Q', title='Bilans dnia (PLN)', format='.2f')]
+                xOffset='Typ:N',
+                y=alt.Y('Wartość:Q', title='PLN'),
+                color=alt.Color('Typ:N', scale=alt.Scale(domain=domain, range=range_colors), legend=alt.Legend(title=None, orient="bottom")),
+                tooltip=[
+                    alt.Tooltip('Data_Tylko:T', format='%d.%m.%Y', title='Data'),
+                    alt.Tooltip('Typ:N', title='Rodzaj'),
+                    alt.Tooltip('Wartość:Q', title='PLN', format='.2f')
+                ]
             )
             st.altair_chart(bars, use_container_width=True)
         else:
-            # Rysowanie pustej siatki kalendarza, jeśli brakuje transakcji w danym miesiącu
-            empty_days = pd.DataFrame({'Data_Tylko': full_range_dni, 'Cashflow': 0})
-            bars = alt.Chart(empty_days).mark_bar(size=12).encode(
+            # Pusta siatka, gdy brak danych
+            empty_days = pd.DataFrame({'Data_Tylko': full_range_dni, 'Wartość': 0})
+            bars = alt.Chart(empty_days).mark_bar(size=8).encode(
                 x=alt.X('yearmonthdate(Data_Tylko):O', title='Data', axis=alt.Axis(format='%d.%m', labelAngle=-90)),
-                y=alt.Y('Cashflow:Q', title='PLN')
+                y=alt.Y('Wartość:Q', title='PLN')
             )
             st.altair_chart(bars, use_container_width=True)
             
