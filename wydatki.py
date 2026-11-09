@@ -159,6 +159,7 @@ if not df.empty and 'Kwota' in df.columns:
 
     miesiace_pl = ['Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec', 'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień']
     nazwa_miesiaca = f"{miesiace_pl[aktywny_miesiac_start.month - 1]} {aktywny_miesiac_start.year}"
+    nazwa_poprzedniego = f"{miesiace_pl[poprzedni_miesiac_start.month - 1]} {poprzedni_miesiac_start.year}"
     
     with c2: 
         st.markdown(f"<h4 style='text-align: center; margin-top: 0;'>{nazwa_miesiaca}</h4>", unsafe_allow_html=True)
@@ -187,16 +188,85 @@ if not df.empty and 'Kwota' in df.columns:
     m3.metric("Wydatki", f"{suma_wydatkow:.2f} PLN", f"{delta_wydatki:.2f} PLN m/m", delta_color="inverse")
     
     st.write("")
-    st.markdown("**Struktura wydatków (wybrany miesiąc)**")
-    if not df_wybrany_wydatki.empty:
-        donut = alt.Chart(df_wybrany_wydatki.groupby('Kategoria')['Kwota'].sum().reset_index()).mark_arc(innerRadius=45).encode(
-            theta='Kwota:Q', 
-            color=alt.Color('Kategoria:N', scale=PALETA_KATEGORII, legend=alt.Legend(orient="bottom", title=None, columns=2)), 
-            tooltip=['Kategoria', alt.Tooltip('Kwota:Q', format='.2f', title='PLN')]
-        ).properties(height=380)
-        st.altair_chart(donut, use_container_width=True)
+    col_wykres1, col_wykres2 = st.columns([2, 1])
+    
+    with col_wykres1:
+        st.markdown("**Cashflow (Wpływy vs Wydatki)**")
+        full_range_dni = pd.date_range(start=aktywny_miesiac_start, end=aktywny_miesiac_koniec, freq='D')
+        
+        if not df_wybrany.empty:
+            df_wykres = df_wybrany.copy()
+            df_wykres['Wartość'] = df_wykres.apply(lambda x: x['Kwota'] if x['Typ'] == 'Wpływ' else -x['Kwota'], axis=1)
+            
+            df_chart_bars = df_wykres.groupby(['Data_Tylko', 'Typ'])['Wartość'].sum().reset_index()
+            
+            empty_days = pd.DataFrame({'Data_Tylko': full_range_dni, 'Typ': 'Wpływ', 'Wartość': 0})
+            df_chart_bars = pd.concat([df_chart_bars, empty_days]).groupby(['Data_Tylko', 'Typ'])['Wartość'].sum().reset_index()
+            
+            domain = ['Wpływ', 'Wydatek']
+            range_colors = ['#2ecc71', '#e74c3c']
+
+            bars = alt.Chart(df_chart_bars).mark_bar(size=12).encode(
+                x=alt.X('yearmonthdate(Data_Tylko):O', title='Data', axis=alt.Axis(format='%d.%m', labelAngle=-90)),
+                y=alt.Y('Wartość:Q', title='PLN'),
+                color=alt.Color('Typ:N', scale=alt.Scale(domain=domain, range=range_colors), legend=alt.Legend(title=None, orient="bottom")),
+                tooltip=[
+                    alt.Tooltip('Data_Tylko:T', format='%d.%m.%Y', title='Data'),
+                    alt.Tooltip('Typ:N', title='Rodzaj'),
+                    alt.Tooltip('Wartość:Q', title='PLN', format='.2f')
+                ]
+            )
+            st.altair_chart(bars, use_container_width=True)
+        else:
+            empty_days = pd.DataFrame({'Data_Tylko': full_range_dni, 'Wartość': 0})
+            bars = alt.Chart(empty_days).mark_bar(size=12).encode(
+                x=alt.X('yearmonthdate(Data_Tylko):O', title='Data', axis=alt.Axis(format='%d.%m', labelAngle=-90)),
+                y=alt.Y('Wartość:Q', title='PLN')
+            )
+            st.altair_chart(bars, use_container_width=True)
+            
+    with col_wykres2:
+        st.markdown("**Struktura wydatków**")
+        if not df_wybrany_wydatki.empty:
+            donut = alt.Chart(df_wybrany_wydatki.groupby('Kategoria')['Kwota'].sum().reset_index()).mark_arc(innerRadius=45).encode(
+                theta='Kwota:Q', 
+                color=alt.Color('Kategoria:N', scale=PALETA_KATEGORII, legend=alt.Legend(orient="bottom", title=None, columns=2)), 
+                tooltip=['Kategoria', alt.Tooltip('Kwota:Q', format='.2f', title='PLN')]
+            ).properties(height=380)
+            st.altair_chart(donut, use_container_width=True)
+        else:
+            st.info("Brak wydatków w wybranym miesiącu.")
+
+    # --- NOWA SEKCJA: PORÓWNANIE MIESIĄC DO MIESIĄCA ---
+    st.write("")
+    st.markdown(f"**Porównanie wydatków: {nazwa_miesiaca} vs {nazwa_poprzedniego}**")
+    
+    df_wybrany_wyd_copy = df_wybrany_wydatki.copy()
+    df_wybrany_wyd_copy['Okres'] = 'Wybrany miesiąc'
+    
+    df_poprzedni_wyd_copy = df_poprzedni[df_poprzedni['Typ'] == 'Wydatek'].copy()
+    df_poprzedni_wyd_copy['Okres'] = 'Poprzedni miesiąc'
+    
+    df_porownanie = pd.concat([df_wybrany_wyd_copy, df_poprzedni_wyd_copy])
+    
+    if not df_porownanie.empty:
+        df_porownanie_grouped = df_porownanie.groupby(['Okres', 'Kategoria'])['Kwota'].sum().reset_index()
+        
+        # Sortowanie według wydatków obecnego miesiąca, żeby te największe były na start
+        sort_porownanie = df_wybrany_wyd_copy.groupby('Kategoria')['Kwota'].sum().sort_values(ascending=False).index.tolist()
+        missing_cats = [c for c in df_porownanie_grouped['Kategoria'].unique() if c not in sort_porownanie]
+        sort_porownanie.extend(missing_cats)
+        
+        bars_compare = alt.Chart(df_porownanie_grouped).mark_bar(size=12).encode(
+            x=alt.X('Kategoria:N', sort=sort_porownanie, title=None, axis=alt.Axis(labelAngle=-45)),
+            xOffset=alt.XOffset('Okres:N', sort=['Poprzedni miesiąc', 'Wybrany miesiąc']),
+            y=alt.Y('Kwota:Q', title='PLN'),
+            color=alt.Color('Okres:N', scale=alt.Scale(domain=['Poprzedni miesiąc', 'Wybrany miesiąc'], range=['#7f8c8d', '#3498db']), legend=alt.Legend(title=None, orient="bottom")),
+            tooltip=[alt.Tooltip('Kategoria:N', title='Kategoria'), alt.Tooltip('Okres:N', title='Okres'), alt.Tooltip('Kwota:Q', title='PLN', format='.2f')]
+        ).properties(height=350)
+        st.altair_chart(bars_compare, use_container_width=True)
     else:
-        st.info("Brak wydatków w wybranym miesiącu.")
+        st.info("Brak danych do porównania z poprzednim miesiącem.")
 
     # --- NOWA SEKCJA: TRENDY ---
     st.divider()
@@ -239,7 +309,6 @@ if not df.empty and 'Kwota' in df.columns:
             empty_kat = pd.DataFrame({'Okres': full_range, 'Kategoria': 'INNE', 'Kwota': 0})
             df_kat_grouped = pd.concat([df_kat_grouped, empty_kat]).groupby(['Okres', 'Kategoria'])['Kwota'].sum().reset_index()
 
-        # WYKRES 1: Cashflow
         st.write("")
         st.markdown("**Cashflow (Wpływy vs Wydatki)**")
         bars_cf = alt.Chart(df_cf_grouped).mark_bar(size=12).encode(
@@ -250,7 +319,6 @@ if not df.empty and 'Kwota' in df.columns:
         )
         st.altair_chart(bars_cf, use_container_width=True)
 
-        # WYKRES 2: Struktura wydatków kolorami
         st.write("")
         st.markdown("**Struktura wydatków w czasie**")
         if not df_kat_grouped.empty and df_kat_grouped['Kwota'].sum() > 0:
@@ -279,21 +347,22 @@ if not df.empty and 'Kwota' in df.columns:
     
     df_wydatki_wszystkie = df[df['Typ'] == 'Wydatek'].copy()
     if not df_wydatki_wszystkie.empty:
-        # Obliczamy ilość unikalnych miesięcy w historii, aby uśrednienie było poprawne
         liczba_miesiecy = df['Data_Tylko'].dt.to_period('M').nunique()
         
         df_srednie = df_wydatki_wszystkie.groupby('Kategoria')['Kwota'].sum().reset_index()
         df_srednie['Średnia'] = df_srednie['Kwota'] / max(1, liczba_miesiecy)
+        
+        # Wymuszenie fizycznego sortowania od największego do najmniejszego
         df_srednie = df_srednie.sort_values(by='Średnia', ascending=False)
+        sort_order_srednie = df_srednie['Kategoria'].tolist()
 
         bars_avg = alt.Chart(df_srednie).mark_bar(cornerRadiusEnd=4).encode(
             x=alt.X('Średnia:Q', title='Średnio PLN / miesiąc', axis=alt.Axis(labels=False, ticks=False)),
-            y=alt.Y('Kategoria:N', sort='-x', title=None),
+            y=alt.Y('Kategoria:N', sort=sort_order_srednie, title=None),
             color=alt.Color('Kategoria:N', scale=PALETA_KATEGORII, legend=None),
             tooltip=[alt.Tooltip('Kategoria:N', title='Kategoria'), alt.Tooltip('Średnia:Q', title='Średnio (PLN/msc)', format='.2f')]
         )
         
-        # Nakładka tekstowa pokazująca dokładne wartości na słupkach
         text_avg = bars_avg.mark_text(
             align='left',
             baseline='middle',
