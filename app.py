@@ -206,19 +206,19 @@ try:
             df_k['Dzień_miesiąca'] = df_k['Data'].dt.day.astype(str)
             df_k['Rząd_tygodnia'] = df_k['Data'].apply(lambda d: (d.day - 1 + d.replace(day=1).weekday()) // 7)
             
+            # ZMIANA: Skalibrowany gradient kolorów
             historyczny_max = df.groupby('Data')['Czysty etanol [g]'].sum().max()
-            if pd.isna(historyczny_max) or historyczny_max == 0:
+            if pd.isna(historyczny_max) or historyczny_max <= 200:
                 historyczny_max = 300
             
-            # ZMIANA: Implementacja nowej dwustopniowej skali gradientowej z ostrym odcięciem na poziomie 200g
             kolorowanie = alt.condition(
                 alt.datum['Etanol'] == 0,
-                alt.value('#27ae60'), # Brak spożycia: Zawsze czysty zielony
+                alt.value('#27ae60'), # Brak spożycia: Czysty zielony
                 alt.Color(
                     'Etanol:Q',
                     scale=alt.Scale(
                         domain=[0.1, 100, 200, 200.1, historyczny_max], 
-                        range=['#f1c40f', '#f39c12', '#e67e22', '#3498db', '#8e44ad'] # Żółty -> Pomarańcz | Niebieski -> Fioletowy
+                        range=['#f1c40f', '#e67e22', '#e74c3c', '#1e3799', '#0a1128'] # Żółty -> Pomarańcz -> Czerwony | Granatowy -> Bardzo ciemny granat
                     ),
                     legend=alt.Legend(title="Etanol (g)")
                 )
@@ -235,9 +235,9 @@ try:
                 x=alt.X('Nazwa_dnia:N', sort=kolejnosc_kalendarza),
                 y=alt.Y('Rząd_tygodnia:O'),
                 text=alt.Text('Dzień_miesiąca:N'),
+                # ZMIANA: Poprawa widoczności na ciemnym tle (ponad 100g = biały tekst)
                 color=alt.condition(
-                    # Poprawka: Dni ekstremalne (ciemny niebieski/fioletowy) dostają biały tekst dla czytelności
-                    (alt.datum['Etanol'] > 200) | (alt.datum['Etanol'] == 0), 
+                    (alt.datum['Etanol'] >= 100) | (alt.datum['Etanol'] == 0), 
                     alt.value('white'), 
                     alt.value('black')
                 )
