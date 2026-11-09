@@ -205,26 +205,12 @@ try:
             df_k['Pełny_dzień'] = df_k['Data'].dt.dayofweek.map(pelne_nazwy)
             df_k['Dzień_miesiąca'] = df_k['Data'].dt.day.astype(str)
             df_k['Rząd_tygodnia'] = df_k['Data'].apply(lambda d: (d.day - 1 + d.replace(day=1).weekday()) // 7)
-
-            # Ekstrakcja historycznego maksimum z pełnego zbioru danych
-            historyczny_max = df.groupby('Data')['Czysty etanol [g]'].sum().max()
             
-            # Zabezpieczenie w przypadku braku danych lub zerowego maksimum
-            if pd.isna(historyczny_max) or historyczny_max == 0:
-                historyczny_max = 100
-                
-           # Definicja mapowania kolorów z gradientem i stałą skalą
             kolorowanie = alt.condition(
                 alt.datum['Etanol'] == 0,
-                alt.value('#27ae60'), # Brak spożycia: Zielony
-                alt.Color('Etanol:Q', 
-                          scale=alt.Scale(
-                              domain=[0.1, historyczny_max / 2, historyczny_max], 
-                              range=['#f1c40f', '#e67e22', '#8b0000'] # Żółty -> Pomarańczowy -> Ciemnoczerwony
-                          ), 
-                          legend=alt.Legend(title="Etanol (g)"))
+                alt.value('#27ae60'),
+                alt.Color('Etanol:Q', scale=alt.Scale(scheme='reds'), legend=alt.Legend(title="Etanol (g)"))
             )
-
             heatmap = alt.Chart(df_k).mark_rect(stroke='gray', strokeWidth=0.5, cornerRadius=3).encode(
                 x=alt.X('Nazwa_dnia:N', sort=kolejnosc_kalendarza, title=None, axis=alt.Axis(labelAngle=0)),
                 y=alt.Y('Rząd_tygodnia:O', title=None, axis=alt.Axis(labels=False, ticks=False)), 
@@ -271,7 +257,8 @@ try:
             
             st.divider()
             
-            widok_wykresu = st.radio("Zmień widok trendu:", ["Dzienny (ostatnie 30 dni)", "Tygodniowy (cała historia)"], horizontal=True)
+            # ZMIANA: Dodano trzecią opcję (Miesięczny widok) do przełącznika
+            widok_wykresu = st.radio("Zmień widok trendu:", ["Dzienny (ostatnie 30 dni)", "Tygodniowy (cała historia)", "Miesięczny (cała historia)"], horizontal=True)
             st.write("")
             
             col1, col2 = st.columns([2, 1])
@@ -279,6 +266,10 @@ try:
             
             with col1:
                 st.markdown("**Trend spożycia**")
+                
+                # ZMIANA LOGIKI TRENDU: Zastąpienie czułego EMA (ewm) potężnym i wolnym SMA (rolling mean) 
+                # Zapewnia wygładzenie i brak gwałtownych skoków od jednego grubego imprezowego słupka
+                
                 if widok_wykresu == "Dzienny (ostatnie 30 dni)":
                     full_range_dni = pd.date_range(start=miesiac_temu, end=dzisiaj, freq='D')
                     df_chart_bars = df_miesiac.groupby(['Data', 'Alkohol'])['Czysty etanol [g]'].sum().reset_index()
@@ -288,7 +279,9 @@ try:
                     df_chart_bars = pd.concat([df_chart_bars, empty_days]).groupby(['Data', 'Alkohol'])['Etanol'].sum().reset_index()
                     
                     df_chart_line = df_chart_bars.groupby('Data')['Etanol'].sum().reset_index()
-                    df_chart_line['Trend'] = df_chart_line['Etanol'].ewm(span=5, adjust=False).mean()
+                    
+                    # 14-dniowy, stabilny amortyzator trendu
+                    df_chart_line['Trend'] = df_chart_line['Etanol'].rolling(window=14, min_periods=1).mean()
 
                     bars = alt.Chart(df_chart_bars).mark_bar(size=15).encode(
                         x=alt.X('yearmonthdate(Data):O', title='Data', axis=alt.Axis(format='%d.%m', labelAngle=-90)),
@@ -303,13 +296,12 @@ try:
                     )
                     st.altair_chart(bars + line, use_container_width=True)
                     
-                else:
+                elif widok_wykresu == "Tygodniowy (cała historia)":
                     df_tyg = df.copy()
                     df_tyg['Tydzień'] = df_tyg['Data'].dt.normalize() - pd.to_timedelta(df_tyg['Data'].dt.dayofweek, unit='D')
                     
                     koniec_poniedzialek = (dzisiaj - pd.to_timedelta(dzisiaj.dayofweek, unit='D')).normalize()
                     
-                    # ZMIANA: Skrypt pobiera najstarszy zdefiniowany wpis w bazie, zamiast wymuszać cofanie o równy rok
                     if not df_tyg.empty:
                         start_range = df_tyg['Tydzień'].min()
                     else:
@@ -324,7 +316,9 @@ try:
                     df_chart_bars = pd.concat([df_chart_bars, empty_weeks]).groupby(['Tydzień', 'Alkohol'])['Etanol'].sum().reset_index()
                     
                     df_chart_line = df_chart_bars.groupby('Tydzień')['Etanol'].sum().reset_index()
-                    df_chart_line['Trend'] = df_chart_line['Etanol'].ewm(span=3, adjust=False).mean()
+                    
+                    # 6-tygodniowy (półtora miesiąca) wskaźnik trendu uodporniony na pojedyncze imprezy
+                    df_chart_line['Trend'] = df_chart_line['Etanol'].rolling(window=6, min_periods=1).mean()
 
                     bars = alt.Chart(df_chart_bars).mark_bar(size=20).encode(
                         x=alt.X('yearmonthdate(Tydzień):O', title='Tydzień (od poniedziałku)', axis=alt.Axis(format='%d.%m', labelAngle=-90)),
@@ -335,6 +329,44 @@ try:
                     
                     line = alt.Chart(df_chart_line).mark_line(color='#3498db', size=3, interpolate='monotone').encode(
                         x=alt.X('yearmonthdate(Tydzień):O'), 
+                        y=alt.Y('Trend:Q')
+                    )
+                    st.altair_chart(bars + line, use_container_width=True)
+                    
+                else:
+                    # NOWY WIDOK MIESIĘCZNY
+                    df_msc = df.copy()
+                    df_msc['Miesiąc_Start'] = df_msc['Data'].dt.to_period('M').dt.to_timestamp()
+                    
+                    koniec_miesiac = dzisiaj.replace(day=1).normalize()
+                    
+                    if not df_msc.empty:
+                        start_range = df_msc['Miesiąc_Start'].min()
+                    else:
+                        start_range = koniec_miesiac - pd.DateOffset(months=3)
+                        
+                    full_range_msc = pd.date_range(start=start_range, end=koniec_miesiac, freq='MS')
+                    
+                    df_chart_bars = df_msc.groupby(['Miesiąc_Start', 'Alkohol'])['Czysty etanol [g]'].sum().reset_index()
+                    df_chart_bars = df_chart_bars.rename(columns={'Czysty etanol [g]': 'Etanol'})
+                    
+                    empty_months = pd.DataFrame({'Miesiąc_Start': full_range_msc, 'Alkohol': 'Piwo', 'Etanol': 0})
+                    df_chart_bars = pd.concat([df_chart_bars, empty_months]).groupby(['Miesiąc_Start', 'Alkohol'])['Etanol'].sum().reset_index()
+                    
+                    df_chart_line = df_chart_bars.groupby('Miesiąc_Start')['Etanol'].sum().reset_index()
+                    
+                    # 4-miesięczna powolna średnia krocząca (wygładzona niemal do ideału)
+                    df_chart_line['Trend'] = df_chart_line['Etanol'].rolling(window=4, min_periods=1).mean()
+
+                    bars = alt.Chart(df_chart_bars).mark_bar(size=35).encode(
+                        x=alt.X('yearmonth(Miesiąc_Start):O', title='Miesiąc', axis=alt.Axis(format='%m.%Y', labelAngle=-90)),
+                        y=alt.Y('Etanol:Q', title='Spożycie (g)'),
+                        color=alt.Color('Alkohol:N', scale=kolory_alko, legend=alt.Legend(title="Trunek", orient="bottom")),
+                        tooltip=[alt.Tooltip('Miesiąc_Start:T', format='%m.%Y', title='Miesiąc'), 'Alkohol', alt.Tooltip('Etanol:Q', title='Etanol (g)')]
+                    )
+                    
+                    line = alt.Chart(df_chart_line).mark_line(color='#3498db', size=3, interpolate='monotone').encode(
+                        x=alt.X('yearmonth(Miesiąc_Start):O'), 
                         y=alt.Y('Trend:Q')
                     )
                     st.altair_chart(bars + line, use_container_width=True)
