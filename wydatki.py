@@ -196,8 +196,12 @@ if not df.empty and 'Kwota' in df.columns:
         else:
             st.info("Brak wydatków do strukturyzacji.")
 
-    st.markdown("**Ostatnie 5 wpisów**")
-    df_disp = df[['Data', 'Typ', 'Kategoria', 'Kwota', 'Notatka']].iloc[::-1].head(5).copy()
+   st.markdown("**Ostatnie 5 wpisów**")
+    
+    # Bezpieczne wybieranie kolumn: bierzemy tylko te, które faktycznie istnieją w dataframe
+    dostepne_kolumny = [col for col in ['Data', 'Typ', 'Kategoria', 'Kwota', 'Notatka'] if col in df.columns]
+    
+    df_disp = df[dostepne_kolumny].iloc[::-1].head(5).copy()
     st.dataframe(df_disp.style.format({'Kwota': '{:.2f}'}), hide_index=True, use_container_width=True)
 
 else:
