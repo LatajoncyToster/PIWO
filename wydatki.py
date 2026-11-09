@@ -85,7 +85,7 @@ with st.form("expense_form", clear_on_submit=True):
         if typ_transakcji == "Wydatek":
             lista_kategorii = [
                 "NA PÓŹNIEJ", "JEDZENIE", "NAPOJE", "ALKOHOL", "SNUSY", 
-                "KOMUNIKACJA", "KAUCJA", "ROZRYWKA", "KOSZTY STAŁE", 
+                "KOMUNIKACJA", "ROZRYWKA", "KOSZTY STAŁE", 
                 "XTB", "PRACA", "INNE"
             ]
         else:
