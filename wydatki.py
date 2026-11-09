@@ -258,4 +258,87 @@ if not df.empty and 'Kwota' in df.columns:
                 x=alt.X('yearmonthdate(Okres):O', title=x_title, axis=alt.Axis(format=x_format, labelAngle=-90)),
                 y=alt.Y('Kwota:Q', title='PLN'),
                 color=alt.Color('Kategoria:N', scale=PALETA_KATEGORII, legend=alt.Legend(title=None, orient="bottom", columns=2)),
-                tooltip=[alt.Tooltip('Okres:T', format=x_format, title='Okres'), alt.Tooltip('Kategoria:N', title='Kategoria'), alt.Tooltip('Kwota:Q', title='PLN', format='.2
+                tooltip=[alt.Tooltip('Okres:T', format=x_format, title='Okres'), alt.Tooltip('Kategoria:N', title='Kategoria'), alt.Tooltip('Kwota:Q', title='PLN', format='.2f')]
+            )
+            
+            df_line = df_kat_grouped.groupby('Okres')['Kwota'].sum().reset_index()
+            df_line['Trend'] = df_line['Kwota'].ewm(span=wygładzanie_span, adjust=False).mean()
+            line_kat = alt.Chart(df_line).mark_line(color='#3498db', size=3, interpolate='monotone').encode(
+                x=alt.X('yearmonthdate(Okres):O'),
+                y=alt.Y('Trend:Q')
+            )
+            st.altair_chart((bars_kat + line_kat).properties(height=380), use_container_width=True)
+        else:
+            st.info("Brak wydatków w tym widoku.")
+    else:
+        st.info("Brak danych w historii.")
+
+    # --- NOWA SEKCJA: ŚREDNIE MIESIĘCZNE ---
+    st.divider()
+    st.markdown("**Średnie miesięczne wydatki wg kategorii (cała historia)**")
+    
+    df_wydatki_wszystkie = df[df['Typ'] == 'Wydatek'].copy()
+    if not df_wydatki_wszystkie.empty:
+        # Obliczamy ilość unikalnych miesięcy w historii, aby uśrednienie było poprawne
+        liczba_miesiecy = df['Data_Tylko'].dt.to_period('M').nunique()
+        
+        df_srednie = df_wydatki_wszystkie.groupby('Kategoria')['Kwota'].sum().reset_index()
+        df_srednie['Średnia'] = df_srednie['Kwota'] / max(1, liczba_miesiecy)
+        df_srednie = df_srednie.sort_values(by='Średnia', ascending=False)
+
+        bars_avg = alt.Chart(df_srednie).mark_bar(cornerRadiusEnd=4).encode(
+            x=alt.X('Średnia:Q', title='Średnio PLN / miesiąc', axis=alt.Axis(labels=False, ticks=False)),
+            y=alt.Y('Kategoria:N', sort='-x', title=None),
+            color=alt.Color('Kategoria:N', scale=PALETA_KATEGORII, legend=None),
+            tooltip=[alt.Tooltip('Kategoria:N', title='Kategoria'), alt.Tooltip('Średnia:Q', title='Średnio (PLN/msc)', format='.2f')]
+        )
+        
+        # Nakładka tekstowa pokazująca dokładne wartości na słupkach
+        text_avg = bars_avg.mark_text(
+            align='left',
+            baseline='middle',
+            dx=5,
+            color='white'
+        ).encode(
+            text=alt.Text('Średnia:Q', format='.2f')
+        )
+        
+        st.altair_chart((bars_avg + text_avg).properties(height=alt.Step(35)), use_container_width=True)
+    else:
+        st.info("Brak wydatków do podsumowania.")
+
+    st.divider()
+    st.markdown("**Historia operacji**")
+    
+    dostepne_kolumny = [col for col in ['Data', 'Typ', 'Kategoria', 'Kwota', 'Notatka'] if col in df.columns]
+    
+    df_disp = df[dostepne_kolumny].iloc[::-1].copy()
+    st.dataframe(df_disp.style.format({'Kwota': '{:.2f}'}), hide_index=True, use_container_width=True, height=350)
+
+else:
+    st.info("Brak danych do wyświetlenia statystyk. Dodaj pierwszą transakcję.")
+
+st.divider()
+st.subheader("Szybkie akcje")
+col_btn1, col_btn2 = st.columns(2)
+
+with col_btn1:
+    if st.button("Cofnij (usuń ostatni wpis)", use_container_width=True):
+        try:
+            worksheet = get_google_sheet()
+            wszystkie_dane = worksheet.get_all_values()
+            
+            if len(wszystkie_dane) > 1:
+                worksheet.delete_rows(len(wszystkie_dane))
+                st.success("Ostatni wpis wyparował z bazy.")
+                fetch_data.clear() 
+                st.rerun() 
+            else:
+                st.warning("Baza jest pusta (zostały same nagłówki).")
+        except Exception as e:
+            st.error(f"Błąd przy usuwaniu: {e}")
+
+with col_btn2:
+    if st.button("Odśwież aplikację", use_container_width=True):
+        fetch_data.clear()
+        st.rerun()
