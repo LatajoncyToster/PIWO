@@ -188,85 +188,16 @@ if not df.empty and 'Kwota' in df.columns:
     m3.metric("Wydatki", f"{suma_wydatkow:.2f} PLN", f"{delta_wydatki:.2f} PLN m/m", delta_color="inverse")
     
     st.write("")
-    col_wykres1, col_wykres2 = st.columns([2, 1])
-    
-    with col_wykres1:
-        st.markdown("**Cashflow (Wpływy vs Wydatki)**")
-        full_range_dni = pd.date_range(start=aktywny_miesiac_start, end=aktywny_miesiac_koniec, freq='D')
-        
-        if not df_wybrany.empty:
-            df_wykres = df_wybrany.copy()
-            df_wykres['Wartość'] = df_wykres.apply(lambda x: x['Kwota'] if x['Typ'] == 'Wpływ' else -x['Kwota'], axis=1)
-            
-            df_chart_bars = df_wykres.groupby(['Data_Tylko', 'Typ'])['Wartość'].sum().reset_index()
-            
-            empty_days = pd.DataFrame({'Data_Tylko': full_range_dni, 'Typ': 'Wpływ', 'Wartość': 0})
-            df_chart_bars = pd.concat([df_chart_bars, empty_days]).groupby(['Data_Tylko', 'Typ'])['Wartość'].sum().reset_index()
-            
-            domain = ['Wpływ', 'Wydatek']
-            range_colors = ['#2ecc71', '#e74c3c']
-
-            bars = alt.Chart(df_chart_bars).mark_bar(size=12).encode(
-                x=alt.X('yearmonthdate(Data_Tylko):O', title='Data', axis=alt.Axis(format='%d.%m', labelAngle=-90)),
-                y=alt.Y('Wartość:Q', title='PLN'),
-                color=alt.Color('Typ:N', scale=alt.Scale(domain=domain, range=range_colors), legend=alt.Legend(title=None, orient="bottom")),
-                tooltip=[
-                    alt.Tooltip('Data_Tylko:T', format='%d.%m.%Y', title='Data'),
-                    alt.Tooltip('Typ:N', title='Rodzaj'),
-                    alt.Tooltip('Wartość:Q', title='PLN', format='.2f')
-                ]
-            )
-            st.altair_chart(bars, use_container_width=True)
-        else:
-            empty_days = pd.DataFrame({'Data_Tylko': full_range_dni, 'Wartość': 0})
-            bars = alt.Chart(empty_days).mark_bar(size=12).encode(
-                x=alt.X('yearmonthdate(Data_Tylko):O', title='Data', axis=alt.Axis(format='%d.%m', labelAngle=-90)),
-                y=alt.Y('Wartość:Q', title='PLN')
-            )
-            st.altair_chart(bars, use_container_width=True)
-            
-    with col_wykres2:
-        st.markdown("**Struktura wydatków**")
-        if not df_wybrany_wydatki.empty:
-            donut = alt.Chart(df_wybrany_wydatki.groupby('Kategoria')['Kwota'].sum().reset_index()).mark_arc(innerRadius=45).encode(
-                theta='Kwota:Q', 
-                color=alt.Color('Kategoria:N', scale=PALETA_KATEGORII, legend=alt.Legend(orient="bottom", title=None, columns=2)), 
-                tooltip=['Kategoria', alt.Tooltip('Kwota:Q', format='.2f', title='PLN')]
-            ).properties(height=380)
-            st.altair_chart(donut, use_container_width=True)
-        else:
-            st.info("Brak wydatków w wybranym miesiącu.")
-
-    # --- NOWA SEKCJA: PORÓWNANIE MIESIĄC DO MIESIĄCA ---
-    st.write("")
-    st.markdown(f"**Porównanie wydatków: {nazwa_miesiaca} vs {nazwa_poprzedniego}**")
-    
-    df_wybrany_wyd_copy = df_wybrany_wydatki.copy()
-    df_wybrany_wyd_copy['Okres'] = 'Wybrany miesiąc'
-    
-    df_poprzedni_wyd_copy = df_poprzedni[df_poprzedni['Typ'] == 'Wydatek'].copy()
-    df_poprzedni_wyd_copy['Okres'] = 'Poprzedni miesiąc'
-    
-    df_porownanie = pd.concat([df_wybrany_wyd_copy, df_poprzedni_wyd_copy])
-    
-    if not df_porownanie.empty:
-        df_porownanie_grouped = df_porownanie.groupby(['Okres', 'Kategoria'])['Kwota'].sum().reset_index()
-        
-        # Sortowanie według wydatków obecnego miesiąca, żeby te największe były na start
-        sort_porownanie = df_wybrany_wyd_copy.groupby('Kategoria')['Kwota'].sum().sort_values(ascending=False).index.tolist()
-        missing_cats = [c for c in df_porownanie_grouped['Kategoria'].unique() if c not in sort_porownanie]
-        sort_porownanie.extend(missing_cats)
-        
-        bars_compare = alt.Chart(df_porownanie_grouped).mark_bar(size=12).encode(
-            x=alt.X('Kategoria:N', sort=sort_porownanie, title=None, axis=alt.Axis(labelAngle=-45)),
-            xOffset=alt.XOffset('Okres:N', sort=['Poprzedni miesiąc', 'Wybrany miesiąc']),
-            y=alt.Y('Kwota:Q', title='PLN'),
-            color=alt.Color('Okres:N', scale=alt.Scale(domain=['Poprzedni miesiąc', 'Wybrany miesiąc'], range=['#7f8c8d', '#3498db']), legend=alt.Legend(title=None, orient="bottom")),
-            tooltip=[alt.Tooltip('Kategoria:N', title='Kategoria'), alt.Tooltip('Okres:N', title='Okres'), alt.Tooltip('Kwota:Q', title='PLN', format='.2f')]
-        ).properties(height=350)
-        st.altair_chart(bars_compare, use_container_width=True)
+    st.markdown("**Struktura wydatków (wybrany miesiąc)**")
+    if not df_wybrany_wydatki.empty:
+        donut = alt.Chart(df_wybrany_wydatki.groupby('Kategoria')['Kwota'].sum().reset_index()).mark_arc(innerRadius=45).encode(
+            theta='Kwota:Q', 
+            color=alt.Color('Kategoria:N', scale=PALETA_KATEGORII, legend=alt.Legend(orient="bottom", title=None, columns=2)), 
+            tooltip=['Kategoria', alt.Tooltip('Kwota:Q', format='.2f', title='PLN')]
+        ).properties(height=380)
+        st.altair_chart(donut, use_container_width=True)
     else:
-        st.info("Brak danych do porównania z poprzednim miesiącem.")
+        st.info("Brak wydatków w wybranym miesiącu.")
 
     # --- NOWA SEKCJA: TRENDY ---
     st.divider()
@@ -341,18 +272,18 @@ if not df.empty and 'Kwota' in df.columns:
     else:
         st.info("Brak danych w historii.")
 
+    # Obliczenia globalne potrzebne w obu poniższych sekcjach
+    df_wydatki_wszystkie = df[df['Typ'] == 'Wydatek'].copy()
+    liczba_miesiecy = df['Data_Tylko'].dt.to_period('M').nunique() if not df.empty else 1
+
     # --- NOWA SEKCJA: ŚREDNIE MIESIĘCZNE ---
     st.divider()
     st.markdown("**Średnie miesięczne wydatki wg kategorii (cała historia)**")
     
-    df_wydatki_wszystkie = df[df['Typ'] == 'Wydatek'].copy()
     if not df_wydatki_wszystkie.empty:
-        liczba_miesiecy = df['Data_Tylko'].dt.to_period('M').nunique()
-        
         df_srednie = df_wydatki_wszystkie.groupby('Kategoria')['Kwota'].sum().reset_index()
         df_srednie['Średnia'] = df_srednie['Kwota'] / max(1, liczba_miesiecy)
         
-        # Wymuszenie fizycznego sortowania od największego do najmniejszego
         df_srednie = df_srednie.sort_values(by='Średnia', ascending=False)
         sort_order_srednie = df_srednie['Kategoria'].tolist()
 
@@ -376,6 +307,50 @@ if not df.empty and 'Kwota' in df.columns:
     else:
         st.info("Brak wydatków do podsumowania.")
 
+    # --- SEKCJA: PORÓWNANIE MIESIĄC DO MIESIĄCA ---
+    st.divider()
+    st.markdown(f"**Porównanie wydatków: {nazwa_miesiaca} vs {nazwa_poprzedniego} vs Średnia**")
+    
+    df_wybrany_wyd_copy = df_wybrany_wydatki.copy()
+    df_wybrany_wyd_copy['Okres'] = 'Wybrany miesiąc'
+    
+    df_poprzedni_wyd_copy = df_poprzedni[df_poprzedni['Typ'] == 'Wydatek'].copy()
+    df_poprzedni_wyd_copy['Okres'] = 'Poprzedni miesiąc'
+    
+    # Tworzenie DataFrame z historycznymi średnimi dla porównania
+    if not df_wydatki_wszystkie.empty:
+        df_srednia_porownanie = df_wydatki_wszystkie.groupby('Kategoria')['Kwota'].sum().reset_index()
+        df_srednia_porownanie['Kwota'] = df_srednia_porownanie['Kwota'] / max(1, liczba_miesiecy)
+        df_srednia_porownanie['Okres'] = 'Średnia historyczna'
+    else:
+        df_srednia_porownanie = pd.DataFrame(columns=['Kategoria', 'Kwota', 'Okres'])
+        
+    df_porownanie = pd.concat([df_srednia_porownanie, df_poprzedni_wyd_copy, df_wybrany_wyd_copy])
+    
+    if not df_porownanie.empty:
+        df_porownanie_grouped = df_porownanie.groupby(['Okres', 'Kategoria'])['Kwota'].sum().reset_index()
+        
+        # Sortowanie według wydatków obecnie wybranego miesiąca (od największych)
+        sort_porownanie = df_wybrany_wyd_copy.groupby('Kategoria')['Kwota'].sum().sort_values(ascending=False).index.tolist()
+        missing_cats = [c for c in df_porownanie_grouped['Kategoria'].unique() if c not in sort_porownanie]
+        sort_porownanie.extend(missing_cats)
+        
+        okres_kolejnosc = ['Średnia historyczna', 'Poprzedni miesiąc', 'Wybrany miesiąc']
+        # Kolory: Jasny szary (Średnia), Ciemny szary (Poprzedni msc), Niebieski (Obecnie przeglądany msc)
+        okres_kolory = ['#bdc3c7', '#7f8c8d', '#3498db']
+        
+        bars_compare = alt.Chart(df_porownanie_grouped).mark_bar(size=10).encode(
+            x=alt.X('Kategoria:N', sort=sort_porownanie, title=None, axis=alt.Axis(labelAngle=-45)),
+            xOffset=alt.XOffset('Okres:N', sort=okres_kolejnosc),
+            y=alt.Y('Kwota:Q', title='PLN'),
+            color=alt.Color('Okres:N', scale=alt.Scale(domain=okres_kolejnosc, range=okres_kolory), legend=alt.Legend(title=None, orient="bottom", columns=2)),
+            tooltip=[alt.Tooltip('Kategoria:N', title='Kategoria'), alt.Tooltip('Okres:N', title='Okres'), alt.Tooltip('Kwota:Q', title='PLN', format='.2f')]
+        ).properties(height=380)
+        st.altair_chart(bars_compare, use_container_width=True)
+    else:
+        st.info("Brak danych do porównania z poprzednim miesiącem.")
+
+    # --- SEKCJA: HISTORIA OPERACJI ---
     st.divider()
     st.markdown("**Historia operacji**")
     
