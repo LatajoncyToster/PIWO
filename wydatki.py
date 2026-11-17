@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
+import numpy as np
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import gspread
@@ -71,7 +72,6 @@ def parsowanie_kwoty(wyrazenie):
 # --- MAPOWANIE KOLORÓW KATEGORII ---
 PALETA_KATEGORII = alt.Scale(
     domain=["JEDZENIE", "NAPOJE", "ALKOHOL", "SNUSY", "ROZRYWKA", "KOMUNIKACJA", "KOSZTY STAŁE", "XTB", "INNE"],
-    # Zmieniono szósty element z jasnego szarego (#bdc3c7) na brązowy (#8B4513)
     range=["#e67e22", "#f1c40f", "#3498db", "#9b59b6", "#2ecc71", "#8B4513", "#7f8c8d", "#e74c3c", "#95a5a6"]
 )
 
@@ -348,6 +348,63 @@ if not df.empty and 'Kwota' in df.columns:
         st.altair_chart(bars_compare, use_container_width=True)
     else:
         st.info("Brak danych do porównania z poprzednim miesiącem.")
+
+    # --- NOWA SEKCJA: PROGNOZA WYDATKÓW ---
+    st.divider()
+    st.markdown("**Prognoza wydatków na kolejne 30 dni**")
+    
+    if not df_wydatki_wszystkie.empty and len(df_wydatki_wszystkie) > 3:
+        min_date = df_wydatki_wszystkie['Data_Tylko'].min()
+        wszystkie_dni = pd.date_range(start=min_date, end=dzisiaj, freq='D')
+        
+        df_dni = df_wydatki_wszystkie.groupby('Data_Tylko')['Kwota'].sum().reset_index()
+        df_dni = df_dni.set_index('Data_Tylko').reindex(wszystkie_dni, fill_value=0).reset_index()
+        df_dni.rename(columns={'index': 'Data'}, inplace=True)
+        
+        x = np.arange(len(df_dni))
+        y = df_dni['Kwota'].values
+        wspolczynniki = np.polyfit(x, y, 1)
+        funkcja_trendu = np.poly1d(wspolczynniki)
+        
+        df_dni['Wartość'] = df_dni['Kwota'].rolling(window=7, min_periods=1).mean()
+        df_dni['Typ'] = 'Historia (średnia 7-dniowa)'
+        
+        przyszle_daty = pd.date_range(start=dzisiaj + pd.Timedelta(days=1), periods=30, freq='D')
+        x_przyszlosc = np.arange(len(df_dni), len(df_dni) + 30)
+        y_przyszlosc = funkcja_trendu(x_przyszlosc)
+        y_przyszlosc = np.maximum(y_przyszlosc, 0)
+        
+        df_przyszlosc = pd.DataFrame({
+            'Data': przyszle_daty,
+            'Wartość': y_przyszlosc,
+            'Typ': 'Prognoza (trend matematyczny)'
+        })
+        
+        df_wykres_prognoza = pd.concat([df_dni[['Data', 'Wartość', 'Typ']], df_przyszlosc])
+        
+        if wspolczynniki[0] > 0.5:
+            werdykt = "📈 **Kierunek:** Wzrostowy. Matematyka sugeruje, że zaczniesz wydawać więcej."
+            kolor_linii = '#e74c3c' 
+        elif wspolczynniki[0] < -0.5:
+            werdykt = "📉 **Kierunek:** Spadkowy. Jesteś na dobrej drodze do ucięcia kosztów."
+            kolor_linii = '#2ecc71' 
+        else:
+            werdykt = "➡️ **Kierunek:** Stabilny. Wydatki utrzymują się na w miarę równym poziomie."
+            kolor_linii = '#f1c40f' 
+            
+        st.write(werdykt)
+        
+        wykres_prog = alt.Chart(df_wykres_prognoza).mark_line(size=3).encode(
+            x=alt.X('yearmonthdate(Data):O', title='Data', axis=alt.Axis(format='%d.%m', labelAngle=-90)),
+            y=alt.Y('Wartość:Q', title='PLN'),
+            color=alt.Color('Typ:N', scale=alt.Scale(domain=['Historia (średnia 7-dniowa)', 'Prognoza (trend matematyczny)'], range=['#7f8c8d', kolor_linii]), legend=alt.Legend(title=None, orient="bottom")),
+            strokeDash=alt.condition(alt.datum.Typ == 'Prognoza (trend matematyczny)', alt.value([5, 5]), alt.value([0])),
+            tooltip=[alt.Tooltip('Data:T', format='%d.%m.%Y', title='Data'), alt.Tooltip('Wartość:Q', title='PLN', format='.2f')]
+        ).properties(height=300)
+        
+        st.altair_chart(wykres_prog, use_container_width=True)
+    else:
+        st.info("Zbyt mało danych do wygenerowania sensownej prognozy.")
 
     # --- SEKCJA: HISTORIA OPERACJI ---
     st.divider()
