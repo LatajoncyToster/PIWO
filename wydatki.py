@@ -306,8 +306,80 @@ if not df.empty and 'Kwota' in df.columns:
         )
         
         st.altair_chart((bars_avg + text_avg).properties(height=alt.Step(35)), use_container_width=True)
+        
+        # Wrzucony statystyczny box dla używek
+        df_uzywki = df_wydatki_wszystkie[df_wydatki_wszystkie['Kategoria'].isin(['ALKOHOL', 'SNUSY'])]
+        if not df_uzywki.empty:
+            srednia_uzywki = df_uzywki['Kwota'].sum() / max(1, liczba_miesiecy)
+            st.info(f"🚬 **Używki (Alkohol + Snusy):** Średnio wydajesz na nie **{srednia_uzywki:.2f} PLN** miesięcznie.")
+            
     else:
         st.info("Brak wydatków do podsumowania.")
+
+    # --- NOWA SEKCJA: PROGNOZA MIESIĘCZNA ---
+    st.divider()
+    st.markdown("**Prognoza wydatków na kolejne miesiące**")
+    
+    if not df_wydatki_wszystkie.empty:
+        df_prog = df_wydatki_wszystkie.copy()
+        df_prog['Miesiąc'] = df_prog['Data_Tylko'] - pd.to_timedelta(df_prog['Data_Tylko'].dt.day - 1, unit='D')
+        df_mies = df_prog.groupby('Miesiąc')['Kwota'].sum().reset_index()
+
+        if len(df_mies) >= 2:
+            x = np.arange(len(df_mies))
+            y = df_mies['Kwota'].values
+            wspolczynniki = np.polyfit(x, y, 1)
+            funkcja_trendu = np.poly1d(wspolczynniki)
+
+            ostatni_mies = df_mies['Miesiąc'].max()
+            przyszle_miesiace = [ostatni_mies + pd.DateOffset(months=1), ostatni_mies + pd.DateOffset(months=2)]
+            x_przyszlosc = np.arange(len(df_mies), len(df_mies) + 2)
+            y_przyszlosc = np.maximum(funkcja_trendu(x_przyszlosc), 0)
+
+            df_hist = df_mies.copy()
+            df_hist['Typ'] = 'Historia (Suma miesięczna)'
+            
+            df_przyszlosc = pd.DataFrame({
+                'Miesiąc': przyszle_miesiace,
+                'Kwota': y_przyszlosc,
+                'Typ': 'Prognoza (Kolejne miesiące)'
+            })
+
+            df_wykres_prognoza = pd.concat([df_hist, df_przyszlosc])
+            
+            df_trend_line = df_wykres_prognoza.copy()
+            df_trend_line['Trend'] = np.maximum(funkcja_trendu(np.arange(len(df_trend_line))), 0)
+
+            if wspolczynniki[0] > 10:
+                werdykt = "📈 **Kierunek:** Wzrostowy. Wydajesz z miesiąca na miesiąc coraz więcej."
+                kolor_linii = '#e74c3c'
+            elif wspolczynniki[0] < -10:
+                werdykt = "📉 **Kierunek:** Spadkowy. Tendencja jest zniżkowa, ucinasz koszty."
+                kolor_linii = '#2ecc71'
+            else:
+                werdykt = "➡️ **Kierunek:** Stabilny. Twoje łączne wydatki trzymają równy poziom."
+                kolor_linii = '#f1c40f'
+
+            st.write(werdykt)
+
+            bars_prog = alt.Chart(df_wykres_prognoza).mark_bar(size=20).encode(
+                x=alt.X('yearmonth(Miesiąc):O', title='Miesiąc', axis=alt.Axis(format='%m.%Y', labelAngle=-45)),
+                y=alt.Y('Kwota:Q', title='PLN'),
+                color=alt.Color('Typ:N', scale=alt.Scale(domain=['Historia (Suma miesięczna)', 'Prognoza (Kolejne miesiące)'], range=['#3498db', '#bdc3c7']), legend=alt.Legend(title=None, orient="bottom")),
+                tooltip=[alt.Tooltip('Miesiąc:T', format='%m.%Y', title='Miesiąc'), alt.Tooltip('Typ:N', title='Rodzaj'), alt.Tooltip('Kwota:Q', title='PLN', format='.2f')]
+            )
+
+            line_prog = alt.Chart(df_trend_line).mark_line(size=3, strokeDash=[5, 5], color=kolor_linii).encode(
+                x=alt.X('yearmonth(Miesiąc):O'),
+                y=alt.Y('Trend:Q')
+            )
+
+            st.altair_chart((bars_prog + line_prog).properties(height=350), use_container_width=True)
+            
+        else:
+            st.info("Potrzebujesz co najmniej dwóch miesięcy historii (z wpisami), żeby wyliczyć sensowny trend miesięczny.")
+    else:
+        st.info("Brak danych do prognozy.")
 
     # --- SEKCJA: PORÓWNANIE MIESIĄC DO MIESIĄCA ---
     st.divider()
@@ -348,63 +420,6 @@ if not df.empty and 'Kwota' in df.columns:
         st.altair_chart(bars_compare, use_container_width=True)
     else:
         st.info("Brak danych do porównania z poprzednim miesiącem.")
-
-    # --- NOWA SEKCJA: PROGNOZA WYDATKÓW ---
-    st.divider()
-    st.markdown("**Prognoza wydatków na kolejne 30 dni**")
-    
-    if not df_wydatki_wszystkie.empty and len(df_wydatki_wszystkie) > 3:
-        min_date = df_wydatki_wszystkie['Data_Tylko'].min()
-        wszystkie_dni = pd.date_range(start=min_date, end=dzisiaj, freq='D')
-        
-        df_dni = df_wydatki_wszystkie.groupby('Data_Tylko')['Kwota'].sum().reset_index()
-        df_dni = df_dni.set_index('Data_Tylko').reindex(wszystkie_dni, fill_value=0).reset_index()
-        df_dni.rename(columns={'index': 'Data'}, inplace=True)
-        
-        x = np.arange(len(df_dni))
-        y = df_dni['Kwota'].values
-        wspolczynniki = np.polyfit(x, y, 1)
-        funkcja_trendu = np.poly1d(wspolczynniki)
-        
-        df_dni['Wartość'] = df_dni['Kwota'].rolling(window=7, min_periods=1).mean()
-        df_dni['Typ'] = 'Historia (średnia 7-dniowa)'
-        
-        przyszle_daty = pd.date_range(start=dzisiaj + pd.Timedelta(days=1), periods=30, freq='D')
-        x_przyszlosc = np.arange(len(df_dni), len(df_dni) + 30)
-        y_przyszlosc = funkcja_trendu(x_przyszlosc)
-        y_przyszlosc = np.maximum(y_przyszlosc, 0)
-        
-        df_przyszlosc = pd.DataFrame({
-            'Data': przyszle_daty,
-            'Wartość': y_przyszlosc,
-            'Typ': 'Prognoza (trend matematyczny)'
-        })
-        
-        df_wykres_prognoza = pd.concat([df_dni[['Data', 'Wartość', 'Typ']], df_przyszlosc])
-        
-        if wspolczynniki[0] > 0.5:
-            werdykt = "📈 **Kierunek:** Wzrostowy. Matematyka sugeruje, że zaczniesz wydawać więcej."
-            kolor_linii = '#e74c3c' 
-        elif wspolczynniki[0] < -0.5:
-            werdykt = "📉 **Kierunek:** Spadkowy. Jesteś na dobrej drodze do ucięcia kosztów."
-            kolor_linii = '#2ecc71' 
-        else:
-            werdykt = "➡️ **Kierunek:** Stabilny. Wydatki utrzymują się na w miarę równym poziomie."
-            kolor_linii = '#f1c40f' 
-            
-        st.write(werdykt)
-        
-        wykres_prog = alt.Chart(df_wykres_prognoza).mark_line(size=3).encode(
-            x=alt.X('yearmonthdate(Data):O', title='Data', axis=alt.Axis(format='%d.%m', labelAngle=-90)),
-            y=alt.Y('Wartość:Q', title='PLN'),
-            color=alt.Color('Typ:N', scale=alt.Scale(domain=['Historia (średnia 7-dniowa)', 'Prognoza (trend matematyczny)'], range=['#7f8c8d', kolor_linii]), legend=alt.Legend(title=None, orient="bottom")),
-            strokeDash=alt.condition(alt.datum.Typ == 'Prognoza (trend matematyczny)', alt.value([5, 5]), alt.value([0])),
-            tooltip=[alt.Tooltip('Data:T', format='%d.%m.%Y', title='Data'), alt.Tooltip('Wartość:Q', title='PLN', format='.2f')]
-        ).properties(height=300)
-        
-        st.altair_chart(wykres_prog, use_container_width=True)
-    else:
-        st.info("Zbyt mało danych do wygenerowania sensownej prognozy.")
 
     # --- SEKCJA: HISTORIA OPERACJI ---
     st.divider()
