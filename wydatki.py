@@ -68,8 +68,8 @@ def parsowanie_kwoty(wyrazenie):
 
 # --- MAPOWANIE KOLORÓW KATEGORII ---
 PALETA_KATEGORII = alt.Scale(
-    domain=["JEDZENIE", "NAPOJE", "ALKOHOL", "SNUSY", "ROZRYWKA", "KOMUNIKACJA", "KOSZTY STAŁE", "XTB", "INNE"],
-    range=["#e67e22", "#f1c40f", "#3498db", "#9b59b6", "#2ecc71", "#8B4513", "#7f8c8d", "#e74c3c", "#95a5a6"]
+    domain=["JEDZENIE", "NAPOJE", "ALKOHOL", "SNUSY", "ROZRYWKA", "KOMUNIKACJA", "KOSZTY STAŁE", "XTB", "CHEMIA", "INNE"],
+    range=["#e67e22", "#f1c40f", "#3498db", "#9b59b6", "#2ecc71", "#8B4513", "#7f8c8d", "#e74c3c", "#00cec9", "#95a5a6"]
 )
 
 # --- POBIERANIE I GLOBALNA OBRÓBKA DANYCH ---
@@ -111,7 +111,7 @@ with tab1:
                 lista_kategorii = [
                     "JEDZENIE", "NAPOJE", "ALKOHOL", "SNUSY", 
                     "KOMUNIKACJA", "ROZRYWKA", "KOSZTY STAŁE", 
-                    "XTB", "INNE"
+                    "XTB", "CHEMIA", "INNE"
                 ]
             else:
                 lista_kategorii = [
